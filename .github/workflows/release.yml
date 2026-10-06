@@ -1,0 +1,280 @@
+name: Release
+
+# Builds installers on each OS, installs and smoke-tests them on the (clean) runner, signs them when the signing
+# secrets are configured, and publishes a GitHub Release for tags like v1.2.3.
+#
+# Run it by hand (Actions > Release > Run workflow) to build and test installers without publishing anything.
+#
+# Optional secrets (unsigned installers are built without them; the release notes then say so):
+#   WINDOWS_CERTIFICATE_PFX (base64), WINDOWS_CERTIFICATE_PASSWORD      Authenticode signing
+#   MAC_CERTIFICATE_P12 (base64), MAC_CERTIFICATE_PASSWORD               Developer ID Application + Installer
+#   MAC_SIGNING_IDENTITY  e.g. "Example Ltd (ABCDE12345)", as in the certificate names
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD                          notarization (app-specific password)
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Built on the oldest supported Ubuntu so package dependencies resolve on 22.04 and newer.
+          - os: ubuntu-22.04
+            types: deb rpm
+          - os: windows-latest
+            types: msi
+          - os: macos-latest
+            types: dmg pkg
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE_PFX != '' }}
+      HAS_MAC_CERT: ${{ secrets.MAC_CERTIFICATE_P12 != '' }}
+      HAS_NOTARY: ${{ secrets.APPLE_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Check the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(grep '^version=' gradle.properties | cut -d= -f2)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match version=$version in gradle.properties"
+            exit 1
+          fi
+
+      - name: Install packaging tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q fakeroot rpm xvfb
+
+      - name: Install WiX 3 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command candle.exe -ErrorAction SilentlyContinue)) {
+            choco install wixtoolset --version 3.14.1 -y --no-progress
+            "C:\Program Files (x86)\WiX Toolset v3.14\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          }
+
+      - name: Import signing certificate (macOS)
+        if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true'
+        env:
+          MAC_CERTIFICATE_P12: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          MAC_SIGNING_IDENTITY: ${{ secrets.MAC_SIGNING_IDENTITY }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+          echo "$MAC_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MAC_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "MAC_SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          echo "MAC_SIGNING_IDENTITY=$MAC_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Build the application folder
+        run: ./gradlew :app:jpackageImage --stacktrace
+
+      - name: Sign the launchers (Windows)
+        if: runner.os == 'Windows' && env.HAS_WINDOWS_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $pfx = "$env:RUNNER_TEMP\cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX))
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
+          Get-ChildItem "app\build\jpackage\image" -Recurse -Include *.exe | ForEach-Object {
+            & $signtool.FullName sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f $pfx /p $env:WINDOWS_CERTIFICATE_PASSWORD $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          "SIGNTOOL=$($signtool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build installers
+        run: |
+          for type in ${{ matrix.types }}; do
+            # -x jpackageImage: keep the (possibly signed) application folder built above.
+            ./gradlew :app:jpackageInstaller -x :app:jpackageImage -PinstallerType=$type --stacktrace
+          done
+          ls -la app/build/jpackage/installer
+
+      - name: Build AppImage and portable archive (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          version=$(grep '^version=' gradle.properties | cut -d= -f2)
+          curl -sSL -o "$RUNNER_TEMP/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x "$RUNNER_TEMP/appimagetool"
+          APPIMAGETOOL="$RUNNER_TEMP/appimagetool" app/src/packaging/linux/build-appimage.sh "$version" \
+            app/build/jpackage/installer
+          tar -C app/build/jpackage/image -czf "app/build/jpackage/installer/hl7-sender-$version-linux-x64.tar.gz" \
+            hl7-sender
+
+      - name: Sign the installer (Windows)
+        if: runner.os == 'Windows' && env.HAS_WINDOWS_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          Get-ChildItem "app\build\jpackage\installer\*.msi" | ForEach-Object {
+            & $env:SIGNTOOL sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f "$env:RUNNER_TEMP\cert.pfx" /p $env:WINDOWS_CERTIFICATE_PASSWORD $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          Remove-Item "$env:RUNNER_TEMP\cert.pfx"
+
+      - name: Notarize (macOS)
+        if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true' && env.HAS_NOTARY == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          for f in app/build/jpackage/installer/*.dmg app/build/jpackage/installer/*.pkg; do
+            xcrun notarytool submit "$f" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD" --wait
+            xcrun stapler staple "$f"
+          done
+
+      # --- Install on this clean runner and try it, like a user would -----------------------------------------
+
+      - name: Install and smoke test (Linux .deb)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y -q ./app/build/jpackage/installer/hl7-sender_*.deb
+          which hl7send
+          hl7send --version
+          export HL7SENDER_HOME="$RUNNER_TEMP/home" JAVA_OPTS=-Dhl7sender.secrets=file
+          hl7send listen -p 12575 --bind 127.0.0.1 > "$RUNNER_TEMP/listen.log" &
+          printf '{"format":1,"destinations":[{"name":"Smoke","host":"127.0.0.1","port":12575}]}' > "$RUNNER_TEMP/d.json"
+          hl7send destination import "$RUNNER_TEMP/d.json"
+          printf 'MSH|^~\\&|CI|CI|R|R|20260101||ADT^A01^ADT_A01|1|P|2.5.1\rPID|1||42' > "$RUNNER_TEMP/m.hl7"
+          hl7send queue send -d Smoke "$RUNNER_TEMP/m.hl7" --wait 30
+          xvfb-run -a /opt/hl7-sender/bin/hl7-sender --smoke-test
+          rpm -qpl app/build/jpackage/installer/*.rpm | grep -q /opt/hl7-sender/bin/hl7send
+          xvfb-run -a app/build/jpackage/installer/*.AppImage --appimage-extract-and-run --smoke-test
+          sudo apt-get remove -y -q hl7-sender
+          test ! -e /usr/bin/hl7send
+
+      - name: Install and smoke test (Windows .msi)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem "app\build\jpackage\installer\*.msi" | Select-Object -First 1
+          $p = Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /l*v `"$env:RUNNER_TEMP\install.log`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\install.log" -Tail 50; exit $p.ExitCode }
+          $cli = Get-ChildItem "$env:LOCALAPPDATA", "$env:ProgramFiles" -Recurse -Depth 3 -Filter hl7send.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $cli) { Write-Error "hl7send.exe not found after install"; exit 1 }
+          & $cli.FullName --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # The GUI needs the runner's desktop session: best effort, with a timeout.
+          $gui = Join-Path $cli.DirectoryName "HL7 Sender.exe"
+          $g = Start-Process $gui -ArgumentList "--smoke-test" -PassThru
+          if ($g.WaitForExit(120000) -and $g.ExitCode -eq 0) { "GUI smoke test passed" }
+          else { if (-not $g.HasExited) { $g.Kill() }; Write-Output "::warning::GUI smoke test did not pass on this Windows runner" }
+          $u = Start-Process msiexec.exe -ArgumentList "/x `"$($msi.FullName)`" /qn" -Wait -PassThru
+          if ($u.ExitCode -ne 0) { exit $u.ExitCode }
+
+      - name: Install and smoke test (macOS .dmg)
+        if: runner.os == 'macOS'
+        run: |
+          dmg=$(ls app/build/jpackage/installer/*.dmg | head -1)
+          hdiutil attach "$dmg" -nobrowse -mountpoint "$RUNNER_TEMP/dmg"
+          cp -R "$RUNNER_TEMP/dmg/HL7 Sender.app" "$RUNNER_TEMP/"
+          hdiutil detach "$RUNNER_TEMP/dmg"
+          "$RUNNER_TEMP/HL7 Sender.app/Contents/MacOS/hl7send" --version
+          "$RUNNER_TEMP/HL7 Sender.app/Contents/MacOS/HL7 Sender" --smoke-test || \
+            echo "::warning::GUI smoke test did not pass on this macOS runner"
+          if [ "$HAS_MAC_CERT" = true ]; then codesign --verify --deep --strict "$RUNNER_TEMP/HL7 Sender.app"; fi
+          if [ "$HAS_NOTARY" = true ]; then spctl --assess --type execute "$RUNNER_TEMP/HL7 Sender.app"; fi
+
+      - name: Checksums
+        run: |
+          cd app/build/jpackage/installer
+          for f in *; do
+            if command -v sha256sum > /dev/null; then sha256sum "$f"; else shasum -a 256 "$f"; fi
+          done > "SHA256SUMS-${{ runner.os }}.txt"
+          cat "SHA256SUMS-${{ runner.os }}.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: app/build/jpackage/installer/*
+          retention-days: 30
+
+  release:
+    name: Publish GitHub Release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Release notes from the commit history
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: release-notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNED_WINDOWS: ${{ secrets.WINDOWS_CERTIFICATE_PFX != '' }}
+          SIGNED_MAC: ${{ secrets.MAC_CERTIFICATE_P12 != '' && secrets.APPLE_ID != '' }}
+        run: |
+          {
+            cat release-notes.md
+            echo
+            echo "### Downloads"
+            echo "- Windows: \`.msi\` (per-user install, no administrator rights needed)"
+            echo "- macOS (Apple silicon): \`.dmg\` or \`.pkg\`"
+            echo "- Linux: \`.deb\` (Ubuntu/Debian 22.04+), \`.rpm\`, \`.AppImage\`, or the portable \`.tar.gz\`"
+            echo
+            echo "Checksums are in the \`SHA256SUMS-*.txt\` files. See docs/user-guide.md to get started."
+            if [ "$SIGNED_WINDOWS" != true ]; then
+              echo
+              echo "> The Windows installer is not code-signed: Windows SmartScreen may warn before installing."
+            fi
+            if [ "$SIGNED_MAC" != true ]; then
+              echo
+              echo "> The macOS packages are not signed and notarized: right-click the app and choose Open the first"
+              echo "> time, or run \`xattr -dr com.apple.quarantine \"/Applications/HL7 Sender.app\"\`."
+            fi
+          } > notes.md
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --title "HL7 Sender ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md $prerelease

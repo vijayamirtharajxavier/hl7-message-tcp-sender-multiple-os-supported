@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Records and immutable value objects routinely hand out List/byte[] views; defensive copies are made where it matters. -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- JavaFX views keep references to mutable controls by design. -->
+    <Match>
+        <Package name="~io\.hl7sender\.app.*"/>
+        <Bug pattern="SIC_INNER_SHOULD_BE_STATIC_ANON,URF_UNREAD_FIELD"/>
+    </Match>
+    <!-- Exceptions from constructors are acceptable for fail-fast validation of settings. -->
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+</FindBugsFilter>

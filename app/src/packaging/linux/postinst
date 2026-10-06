@@ -1,0 +1,31 @@
+#!/bin/sh
+# postinst script for APPLICATION_PACKAGE.
+# Based on jpackage's template; HL7 Sender changes: a missing desktop menu (headless servers) does not fail the
+# install, and the hl7send command line tool is linked into /usr/bin.
+
+set -e
+
+package_type=deb
+LAUNCHER_AS_SERVICE_SCRIPTS
+
+case "$1" in
+    configure)
+        if ! ( true
+DESKTOP_COMMANDS_INSTALL
+        ); then
+            echo "APPLICATION_PACKAGE: desktop menu not updated (no desktop environment)" >&2
+        fi
+LAUNCHER_AS_SERVICE_COMMANDS_INSTALL
+        ln -sf /opt/hl7-sender/bin/hl7send /usr/bin/hl7send
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

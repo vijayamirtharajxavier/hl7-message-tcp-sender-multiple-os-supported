@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<HL7v2xConformanceProfile HL7Version="2.5.1" ProfileType="Implementation">
+  <MetaData Name="Demo ADT A01" OrgName="HL7 Sender" Version="1.0" Status="DRAFT" Topics="test"/>
+  <Encodings><Encoding>ER7</Encoding></Encodings>
+  <DynamicDef AccAck="NE" AppAck="AL" MsgAckMode="Deferred"/>
+  <HL7v2xStaticDef MsgType="ADT" EventType="A01" MsgStructID="ADT_A01" EventDesc="Admit" Role="Sender">
+    <MetaData Name="Demo ADT A01" OrgName="HL7 Sender" Version="1.0"/>
+    <Segment Name="MSH" LongName="Message Header" Usage="R" Min="1" Max="1">
+      <Field Name="Field Separator" Usage="R" Min="1" Max="1" Datatype="ST" Length="1" ItemNo="00001"/>
+      <Field Name="Encoding Characters" Usage="R" Min="1" Max="1" Datatype="ST" Length="4" ItemNo="00002"/>
+      <Field Name="Sending Application" Usage="R" Min="1" Max="1" Datatype="HD" Length="227" ItemNo="00003"/>
+      <Field Name="Sending Facility" Usage="O" Min="0" Max="1" Datatype="HD" Length="227" ItemNo="00004"/>
+      <Field Name="Receiving Application" Usage="O" Min="0" Max="1" Datatype="HD" Length="227" ItemNo="00005"/>
+      <Field Name="Receiving Facility" Usage="O" Min="0" Max="1" Datatype="HD" Length="227" ItemNo="00006"/>
+      <Field Name="Date/Time Of Message" Usage="R" Min="1" Max="1" Datatype="TS" Length="26" ItemNo="00007"/>
+      <Field Name="Security" Usage="O" Min="0" Max="1" Datatype="ST" Length="40" ItemNo="00008"/>
+      <Field Name="Message Type" Usage="R" Min="1" Max="1" Datatype="MSG" Length="15" ItemNo="00009"/>
+      <Field Name="Message Control ID" Usage="R" Min="1" Max="1" Datatype="ST" Length="20" ItemNo="00010"/>
+      <Field Name="Processing ID" Usage="R" Min="1" Max="1" Datatype="PT" Length="3" ItemNo="00011"/>
+      <Field Name="Version ID" Usage="R" Min="1" Max="1" Datatype="VID" Length="60" ItemNo="00012"/>
+    </Segment>
+    <Segment Name="EVN" LongName="Event Type" Usage="R" Min="1" Max="1">
+      <Field Name="Event Type Code" Usage="O" Min="0" Max="1" Datatype="ID" Length="3" ItemNo="00099"/>
+      <Field Name="Recorded Date/Time" Usage="R" Min="1" Max="1" Datatype="TS" Length="26" ItemNo="00100"/>
+    </Segment>
+    <Segment Name="PID" LongName="Patient Identification" Usage="R" Min="1" Max="1">
+      <Field Name="Set ID - PID" Usage="O" Min="0" Max="1" Datatype="SI" Length="4" ItemNo="00104"/>
+      <Field Name="Patient ID" Usage="X" Min="0" Max="0" Datatype="CX" Length="20" ItemNo="00105"/>
+      <Field Name="Patient Identifier List" Usage="R" Min="1" Max="*" Datatype="CX" Length="250" ItemNo="00106"/>
+      <Field Name="Alternate Patient ID - PID" Usage="O" Min="0" Max="1" Datatype="CX" Length="20" ItemNo="00107"/>
+      <Field Name="Patient Name" Usage="R" Min="1" Max="1" Datatype="XPN" Length="250" ItemNo="00108"/>
+      <Field Name="Mothers Maiden Name" Usage="O" Min="0" Max="1" Datatype="XPN" Length="250" ItemNo="00109"/>
+      <Field Name="Date/Time of Birth" Usage="R" Min="1" Max="1" Datatype="TS" Length="26" ItemNo="00110"/>
+      <Field Name="Administrative Sex" Usage="R" Min="1" Max="1" Datatype="IS" Length="1" ItemNo="00111"/>
+    </Segment>
+    <Segment Name="PV1" LongName="Patient Visit" Usage="R" Min="1" Max="1">
+      <Field Name="Set ID - PV1" Usage="O" Min="0" Max="1" Datatype="SI" Length="4" ItemNo="00131"/>
+      <Field Name="Patient Class" Usage="R" Min="1" Max="1" Datatype="IS" Length="1" ItemNo="00132"/>
+    </Segment>
+  </HL7v2xStaticDef>
+</HL7v2xConformanceProfile>

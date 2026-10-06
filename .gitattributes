@@ -1,0 +1,10 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+gradlew text eol=lf
+*.jar binary
+*.png binary
+*.ico binary
+*.icns binary
+# HL7 samples keep their exact bytes (segment terminator is CR).
+*.hl7 -text

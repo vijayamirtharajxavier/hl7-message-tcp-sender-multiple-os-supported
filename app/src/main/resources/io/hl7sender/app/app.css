@@ -1,0 +1,94 @@
+/* Badge colours give white text at least 4.5:1 contrast (WCAG AA). */
+.root {
+    -hl7-success: #1e7d32;
+    -hl7-warning: #9a5b00;
+    -hl7-failure: #c62828;
+    -hl7-neutral: #546e7a;
+}
+
+.section-title {
+    -fx-font-weight: bold;
+    -fx-padding: 0 0 4 0;
+}
+
+.form-pane {
+    -fx-padding: 10;
+    -fx-hgap: 8;
+    -fx-vgap: 8;
+}
+
+.badge {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-padding: 4 10 4 10;
+    -fx-background-radius: 4;
+}
+
+.badge-success { -fx-background-color: -hl7-success; }
+.badge-warning { -fx-background-color: -hl7-warning; }
+.badge-failure { -fx-background-color: -hl7-failure; }
+.badge-neutral { -fx-background-color: -hl7-neutral; }
+
+.issue-error { -fx-text-fill: -hl7-failure; }
+.issue-warning { -fx-text-fill: -hl7-warning; }
+
+.status-bar {
+    -fx-padding: 4 10 4 10;
+    -fx-border-color: derive(-fx-base, -15%) transparent transparent transparent;
+}
+
+.field-label {
+    -fx-text-fill: #555b63;
+}
+
+/* HL7 editor syntax colouring */
+.hl7-editor { -fx-background-color: -fx-control-inner-background; }
+.hl7-editor .text { -fx-fill: -fx-text-inner-color; }
+.hl7-editor .caret { -fx-stroke: -fx-text-inner-color; }
+.hl7-editor .hl7-segment { -fx-fill: #1565c0; -fx-font-weight: bold; }
+.hl7-editor .hl7-field-sep { -fx-fill: #c62828; -fx-font-weight: bold; }
+.hl7-editor .hl7-component-sep { -fx-fill: #6a1b9a; }
+.hl7-editor .hl7-repetition-sep { -fx-fill: #ef6c00; -fx-font-weight: bold; }
+.hl7-editor .hl7-subcomponent-sep { -fx-fill: #00838f; }
+.hl7-editor .hl7-escape { -fx-fill: #2e7d32; }
+.hl7-editor .hl7-variable { -fx-fill: #ad1457; -fx-font-style: italic; }
+.hl7-editor .paragraph-box:has-caret { -fx-background-color: derive(-fx-control-inner-background, -3%); }
+
+/* Dashboard */
+.dashboard-card {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: derive(-fx-base, -12%);
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 12;
+}
+
+.metric-value {
+    -fx-font-size: 1.5em;
+    -fx-font-weight: bold;
+}
+
+.sparkline-bar { -fx-fill: #1565c0; }
+
+/* In-app notification */
+.toast {
+    -fx-background-color: #37474f;
+    -fx-background-radius: 6;
+    -fx-padding: 10 14 10 14;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 12, 0, 0, 3);
+}
+
+.toast .label {
+    -fx-text-fill: white;
+}
+
+.toast .toast-title {
+    -fx-font-weight: bold;
+}
+
+.hl7-tooltip {
+    -fx-background-color: #37474f;
+    -fx-text-fill: white;
+    -fx-padding: 4 8 4 8;
+    -fx-background-radius: 3;
+}

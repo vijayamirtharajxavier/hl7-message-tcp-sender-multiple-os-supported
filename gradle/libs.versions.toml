@@ -1,0 +1,58 @@
+[versions]
+hapi = "2.6.0"
+javafx = "21.0.12"
+picocli = "4.7.7"
+slf4j = "2.0.17"
+logback = "1.5.18"
+jackson = "2.19.2"
+sqlite = "3.53.4.0"
+javakeyring = "1.0.4"
+angus-mail = "2.0.4"
+rhino = "1.9.1"
+postgresql = "42.7.13"
+junit = "5.13.4"
+assertj = "3.27.4"
+testfx = "4.0.18"
+monocle = "21.0.2"
+hamcrest = "3.0"
+richtextfx = "0.11.7"
+checkstyle = "10.26.1"
+spotbugs = "4.9.4"
+
+[libraries]
+hapi-base = { module = "ca.uhn.hapi:hapi-base", version.ref = "hapi" }
+hapi-v21 = { module = "ca.uhn.hapi:hapi-structures-v21", version.ref = "hapi" }
+hapi-v22 = { module = "ca.uhn.hapi:hapi-structures-v22", version.ref = "hapi" }
+hapi-v23 = { module = "ca.uhn.hapi:hapi-structures-v23", version.ref = "hapi" }
+hapi-v231 = { module = "ca.uhn.hapi:hapi-structures-v231", version.ref = "hapi" }
+hapi-v24 = { module = "ca.uhn.hapi:hapi-structures-v24", version.ref = "hapi" }
+hapi-v25 = { module = "ca.uhn.hapi:hapi-structures-v25", version.ref = "hapi" }
+hapi-v251 = { module = "ca.uhn.hapi:hapi-structures-v251", version.ref = "hapi" }
+hapi-v26 = { module = "ca.uhn.hapi:hapi-structures-v26", version.ref = "hapi" }
+hapi-v27 = { module = "ca.uhn.hapi:hapi-structures-v27", version.ref = "hapi" }
+hapi-v28 = { module = "ca.uhn.hapi:hapi-structures-v28", version.ref = "hapi" }
+hapi-v281 = { module = "ca.uhn.hapi:hapi-structures-v281", version.ref = "hapi" }
+picocli = { module = "info.picocli:picocli", version.ref = "picocli" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+java-keyring = { module = "com.github.javakeyring:java-keyring", version.ref = "javakeyring" }
+angus-mail = { module = "org.eclipse.angus:angus-mail", version.ref = "angus-mail" }
+sqlite-jdbc = { module = "io.github.willena:sqlite-jdbc", version.ref = "sqlite" }
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+assertj = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+testfx-junit5 = { module = "org.testfx:testfx-junit5", version.ref = "testfx" }
+richtextfx = { module = "org.fxmisc.richtext:richtextfx", version.ref = "richtextfx" }
+hamcrest = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
+monocle = { module = "org.testfx:openjfx-monocle", version.ref = "monocle" }
+
+[bundles]
+hapi-structures = ["hapi-v21", "hapi-v22", "hapi-v23", "hapi-v231", "hapi-v24", "hapi-v25", "hapi-v251", "hapi-v26", "hapi-v27", "hapi-v28", "hapi-v281"]
+
+[plugins]
+javafx = { id = "org.openjfx.javafxplugin", version = "0.1.0" }
+spotbugs = { id = "com.github.spotbugs", version = "6.2.4" }

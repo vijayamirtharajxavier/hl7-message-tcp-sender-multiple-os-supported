@@ -1,0 +1,51 @@
+/* Dark theme, loaded after app.css. Colours keep at least 4.5:1 contrast for text (WCAG AA). */
+.root {
+    -fx-base: #2d3035;
+    -fx-background: #1f2124;
+    -fx-control-inner-background: #26292d;
+    -fx-control-inner-background-alt: #2b2e33;
+    -fx-accent: #4a8ff0;
+    -fx-focus-color: #6aa5ff;
+    -fx-faint-focus-color: #6aa5ff33;
+    -fx-selection-bar: #3b6fb6;
+    -fx-selection-bar-non-focused: #3a4048;
+    -hl7-success: #2e7d32;
+    -hl7-warning: #9a5b00;
+    -hl7-failure: #c62828;
+    -hl7-neutral: #546e7a;
+}
+
+.issue-error { -fx-text-fill: #ff8a80; }
+.issue-warning { -fx-text-fill: #ffcc80; }
+
+.field-label {
+    -fx-text-fill: #b8bec6;
+}
+
+.hl7-editor .hl7-segment { -fx-fill: #82b1ff; }
+.hl7-editor .hl7-field-sep { -fx-fill: #ff8a80; }
+.hl7-editor .hl7-component-sep { -fx-fill: #ce93d8; }
+.hl7-editor .hl7-repetition-sep { -fx-fill: #ffb74d; }
+.hl7-editor .hl7-subcomponent-sep { -fx-fill: #80deea; }
+.hl7-editor .hl7-escape { -fx-fill: #a5d6a7; }
+.hl7-editor .hl7-variable { -fx-fill: #f48fb1; }
+
+.hl7-tooltip {
+    -fx-background-color: #eceff1;
+    -fx-text-fill: #1f2124;
+}
+
+.dashboard-card {
+    -fx-background-color: #26292d;
+    -fx-border-color: #3a3f46;
+}
+
+.sparkline-bar { -fx-fill: #4a8ff0; }
+
+.toast {
+    -fx-background-color: #eceff1;
+}
+
+.toast .label {
+    -fx-text-fill: #1f2124;
+}

@@ -1,0 +1,34 @@
+#!/bin/sh
+# prerm script for APPLICATION_PACKAGE.
+# Based on jpackage's template; HL7 Sender changes: tolerate a missing desktop menu, and remove the
+# /usr/bin/hl7send link created by postinst (only if it still points at this package).
+
+set -e
+
+package_type=deb
+DESKTOP_SCRIPTS
+LAUNCHER_AS_SERVICE_SCRIPTS
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        if ! ( true
+DESKTOP_COMMANDS_UNINSTALL
+        ); then
+            echo "APPLICATION_PACKAGE: desktop menu not updated" >&2
+        fi
+LAUNCHER_AS_SERVICE_COMMANDS_UNINSTALL
+        if [ "$1" = remove ] && [ "$(readlink /usr/bin/hl7send 2>/dev/null)" = /opt/hl7-sender/bin/hl7send ]; then
+            rm -f /usr/bin/hl7send
+        fi
+    ;;
+
+    failed-upgrade)
+    ;;
+
+    *)
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

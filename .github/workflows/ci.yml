@@ -1,0 +1,186 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # The shared-database tests against a real PostgreSQL server (they are skipped in the build job).
+  postgres:
+    name: PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: hl7
+          POSTGRES_PASSWORD: hl7pass
+          POSTGRES_DB: hl7test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hl7" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      HL7SENDER_TEST_POSTGRES_URL: jdbc:postgresql://127.0.0.1:5432/hl7test
+      HL7SENDER_TEST_POSTGRES_USER: hl7
+      HL7SENDER_TEST_POSTGRES_PASSWORD: hl7pass
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Shared-database tests
+        run: >-
+          ./gradlew test --stacktrace --tests '*Postgres*' --tests '*DatabaseCliTest*' --tests '*DatabaseUiTest*'
+
+      - name: Annotate failed tests
+        if: failure()
+        run: python3 .github/scripts/annotate-test-failures.py
+
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-test-reports
+          path: "**/build/reports/"
+          retention-days: 7
+
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Compile, unit + integration + headless UI tests, Checkstyle, SpotBugs.
+      - name: Build and test
+        run: ./gradlew build --stacktrace
+
+      # Each failed test becomes an annotation, readable on the run summary without downloading the reports.
+      - name: Annotate failed tests
+        if: failure()
+        run: python3 .github/scripts/annotate-test-failures.py || python .github/scripts/annotate-test-failures.py
+
+      - name: Load test (10,000 messages)
+        if: runner.os == 'Linux'
+        run: ./gradlew :core:slowTest
+
+      - name: CLI smoke test
+        run: ./gradlew :cli:run --args="--version" --quiet
+
+      # Start the headless service with the API, queue a message from a second process, and stop it with SIGTERM.
+      - name: Headless service smoke test
+        if: runner.os == 'Linux'
+        run: |
+          ./gradlew :cli:installDist --quiet
+          export HL7SENDER_HOME="$RUNNER_TEMP/hl7home"
+          export JAVA_OPTS="-Dhl7sender.secrets=file"
+          HL7=cli/build/install/hl7send/bin/hl7send
+          $HL7 listen -p 12575 --bind 127.0.0.1 > "$RUNNER_TEMP/listen.log" &
+          LISTENER=$!
+          printf '{"format":1,"destinations":[{"name":"CI","host":"127.0.0.1","port":12575}]}' > "$RUNNER_TEMP/ci.json"
+          $HL7 destination import "$RUNNER_TEMP/ci.json"
+          $HL7 serve --api --api-port 18742 > "$RUNNER_TEMP/serve.log" 2>&1 &
+          SERVE=$!
+          for i in $(seq 1 60); do $HL7 api status > /dev/null && break; sleep 1; done
+          $HL7 api status
+          printf 'MSH|^~\\&|CI|CI|R|R|20260101||ADT^A01^ADT_A01|1|P|2.5.1\rPID|1||42' > "$RUNNER_TEMP/m.hl7"
+          $HL7 queue send -d CI "$RUNNER_TEMP/m.hl7" --wait 30 --json
+          $HL7 queue status --json
+          kill -TERM $SERVE
+          wait $SERVE || test $? -eq 143
+          grep -q "Stopped." "$RUNNER_TEMP/serve.log"
+          kill $LISTENER || true
+          cat "$RUNNER_TEMP/serve.log"
+
+      - name: Desktop app smoke test (virtual display)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ./gradlew :app:run --args="--smoke-test" --quiet
+
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ matrix.os }}
+          path: "**/build/reports/"
+          retention-days: 14
+
+  # Builds the packaged application (bundled Java runtime, both launchers) on each OS and runs it, so packaging
+  # problems (a missing JDK module, a launcher that does not start) are found before a release.
+  package:
+    name: Package (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the application folder
+        run: ./gradlew :app:jpackageImage --stacktrace
+
+      - name: Run the packaged CLI and app
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   dir="app/build/jpackage/image/hl7-sender/bin"; cli="$dir/hl7send"; gui="xvfb-run -a $dir/hl7-sender" ;;
+            Windows) dir="app/build/jpackage/image/HL7 Sender"; cli="$dir/hl7send.exe"; gui="" ;;
+            macOS)   dir="app/build/jpackage/image/HL7 Sender.app/Contents/MacOS"; cli="$dir/hl7send"; gui="$dir/HL7 Sender" ;;
+          esac
+          "$cli" --version
+          export HL7SENDER_HOME="$RUNNER_TEMP/home"
+          printf 'MSH|^~\\&|A|B|C|D|20260101||ADT^A01^ADT_A01|1|P|2.5.1\rPID|1||42' > "$RUNNER_TEMP/m.hl7"
+          "$cli" validate --json "$RUNNER_TEMP/m.hl7"
+          # Transform scripts (Rhino) need modules beyond what jdeps finds; prove they work in the trimmed runtime.
+          printf "msg.set('PID-3', 'X' + msg.get('PID-3'));" > "$RUNNER_TEMP/s.js"
+          "$cli" script test --script "$RUNNER_TEMP/s.js" "$RUNNER_TEMP/m.hl7" | grep -q "PID|1||X42"
+          # The GUI needs a display: xvfb on Linux (must pass); the runner's desktop session on macOS (best effort).
+          if [ "$RUNNER_OS" = Linux ]; then $gui --smoke-test; fi
+          if [ "$RUNNER_OS" = macOS ]; then
+            "$gui" --smoke-test || echo "::warning::GUI smoke test did not pass on this macOS runner"
+          fi
+
+  wrapper-validation:
+    name: Validate Gradle wrapper
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gradle/actions/wrapper-validation@v4
