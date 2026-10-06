@@ -7,7 +7,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-First release candidate for 1.0.0. Everything below is new. HL7 Sender is released under the MIT License.
+## [1.0.0] - 2026-10-06
+
+The first public release. Everything below is new. HL7 Sender is released under the MIT License.
 
 ### Sending and acknowledgments
 - HL7 v2 over MLLP with connect and total ACK timeouts, configurable character sets, and optional generation of
@@ -67,4 +69,5 @@ First release candidate for 1.0.0. Everything below is new. HL7 Sender is releas
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/commits/main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.0...main
+[1.0.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/releases/tag/v1.0.0
