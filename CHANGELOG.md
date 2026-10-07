@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-07
+
+### Changed
+- Enhanced-mode commit codes have their own outcomes and policy, following HL7 v2 chapter 2 (section 2.9.3 in
+  v2.5.1), instead of sharing them with AE and AR:
+  - **CR** (`COMMIT_REJECT`): the receiver does not accept the message type (MSH-9), version (MSH-12) or
+    processing ID (MSH-11). Resending the same message cannot fix that, so it now goes to the dead-letter queue by
+    default. It was retried.
+  - **CE** (`COMMIT_ERROR`): the receiver could not commit the message for another reason, such as a sequence
+    number error, which may clear. It is now retried by default. It went to the dead-letter queue.
+  - The Destination dialog has separate **On CR** and **On CE** settings. Existing destinations get the new
+    defaults; a setting changed earlier for AR or AE no longer applies to CR or CE.
+  - `hl7send` exit codes are unchanged: CE still exits with 3 and CR with 4.
+
 ## [1.0.5] - 2026-10-07
 
 ### Fixed
@@ -117,7 +131,8 @@ The first public release. Everything below is new. HL7 Sender is released under 
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.5...main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.0...main
+[1.1.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.5...v1.1.0
 [1.0.5]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.2...v1.0.3
