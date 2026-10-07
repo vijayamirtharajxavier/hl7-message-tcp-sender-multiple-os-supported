@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-07
+
+### Fixed
+- The app icon now shows in the Linux dock and taskbar, and in the title bar of every window, instead of a
+  generic gear. The Linux menu entry is named "HL7 Sender".
+- **Help > Check for updates** opens at full size on Linux desktops; in 1.0.2 it could open only about 200 px
+  wide.
+
 ## [1.0.2] - 2026-10-07
 
 ### Fixed
@@ -81,7 +89,8 @@ The first public release. Everything below is new. HL7 Sender is released under 
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.2...main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.3...main
+[1.0.3]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/releases/tag/v1.0.0
