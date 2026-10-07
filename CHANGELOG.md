@@ -7,9 +7,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-07
+
 ### Fixed
 - The Destination dialog fits on small screens: its Connection and delivery tab scrolls, so the OK and Cancel
   buttons are no longer pushed below the bottom of a 768 px or 800 px high screen.
+- The 1.1.0 release was published without its Linux `.deb`, `.rpm`, portable `.tar.gz` and Linux checksums. The
+  release workflow now checks that every installer is present and uploaded before it finishes.
 
 ## [1.1.0] - 2026-10-07
 
@@ -135,7 +139,8 @@ The first public release. Everything below is new. HL7 Sender is released under 
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.0...main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.1...main
+[1.1.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.5...v1.1.0
 [1.0.5]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.3...v1.0.4
