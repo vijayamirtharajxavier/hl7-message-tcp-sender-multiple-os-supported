@@ -82,6 +82,7 @@ final class Styles {
             while (change.next()) {
                 for (Window w : change.getAddedSubList()) {
                     AppIcons.apply(w);
+                    KeepMaximized.watch(w);
                     if (w.getScene() != null) {
                         apply(w.getScene());
                     }
