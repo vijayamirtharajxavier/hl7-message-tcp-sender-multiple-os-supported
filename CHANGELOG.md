@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-10-07
+
+### Fixed
+- HL7 v2 to FHIR: a PV1-2 patient class with no Encounter.class equivalent (such as U, or an empty PV1-2) now
+  becomes `http://terminology.hl7.org/CodeSystem/v3-NullFlavor#UNK` instead of a guessed `AMB`, and the FHIR
+  preview and `hl7send fhir convert` show a note naming PV1-2. I, O, E and P still map to IMP, AMB, EMER and
+  PRENC.
+
 ## [1.0.4] - 2026-10-07
 
 ### Added
@@ -109,7 +117,8 @@ The first public release. Everything below is new. HL7 Sender is released under 
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.4...main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.5...main
+[1.0.5]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.1...v1.0.2
