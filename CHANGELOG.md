@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-07
+
+### Changed
+- HL7 v2 to FHIR: outside ADT messages, a PV1 that carries only a visit number (PV1-19), with no patient class,
+  location, attending doctor or admit/discharge times, no longer creates a nearly empty Encounter with an `UNK`
+  class. Resources refer to the existing Encounter by that identifier instead
+  (`{"type": "Encounter", "identifier": {"value": "..."}}`), and the FHIR preview notes it. ADT messages, and PV1
+  segments with more than the visit number, still create the Encounter.
+- Observations and DiagnosticReports now refer to the visit too (`encounter`), as ServiceRequests and Conditions
+  already did.
+
 ## [1.2.0] - 2026-10-07
 
 ### Added
@@ -162,7 +173,8 @@ The first public release. Everything below is new. HL7 Sender is released under 
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.0...main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.1...main
+[1.2.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.5...v1.1.0
