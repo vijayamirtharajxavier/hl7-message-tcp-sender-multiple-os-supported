@@ -158,8 +158,8 @@ public final class Transports implements java.io.Closeable {
     }
 
     /**
-     * Interprets an HL7 acknowledgment returned by a non-MLLP receiver, as for MLLP: AA/CA accepted, AE/CE and
-     * AR/CR by code, and a mismatched MSA-2 flagged. Returns empty if {@code body} is not an HL7 ACK.
+     * Interprets an HL7 acknowledgment returned by a non-MLLP receiver, as for MLLP: AA/CA accepted, AE, AR, CE
+     * and CR each by code, and a mismatched MSA-2 flagged. Returns empty if {@code body} is not an HL7 ACK.
      */
     public static Optional<SendResult> fromAck(String body, String where, PreparedMessage message, Instant start,
                                                Duration roundTrip) {
@@ -177,11 +177,7 @@ public final class Transports implements java.io.Closeable {
             return Optional.of(result(SendOutcome.CONTROL_ID_MISMATCH, where, message, ack, body,
                     "Expected MSA-2 '" + expected + "' but received '" + ack.controlId() + "'", start, roundTrip));
         }
-        SendOutcome outcome = switch (ack.code().category()) {
-            case ACCEPT -> SendOutcome.ACCEPTED;
-            case ERROR -> SendOutcome.APPLICATION_ERROR;
-            case REJECT -> SendOutcome.APPLICATION_REJECT;
-        };
+        SendOutcome outcome = SendOutcome.of(ack.code());
         String detail = ack.text().isEmpty() && !ack.errors().isEmpty() ? ack.errors().get(0).describe() : ack.text();
         return Optional.of(result(outcome, where, message, ack, body, detail, start, roundTrip));
     }

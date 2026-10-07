@@ -54,6 +54,8 @@ class PolicyTest {
         assertThat(p.actionFor(SendOutcome.APPLICATION_ERROR)).isEqualTo(Action.DEAD_LETTER);
         assertThat(p.actionFor(SendOutcome.VALIDATION_FAILED)).isEqualTo(Action.DEAD_LETTER);
         assertThat(p.actionFor(SendOutcome.APPLICATION_REJECT)).isEqualTo(Action.RETRY);
+        assertThat(p.actionFor(SendOutcome.COMMIT_REJECT)).isEqualTo(Action.DEAD_LETTER);
+        assertThat(p.actionFor(SendOutcome.COMMIT_ERROR)).isEqualTo(Action.RETRY);
         assertThat(p.actionFor(SendOutcome.ACK_TIMEOUT)).isEqualTo(Action.RETRY);
         assertThat(p.actionFor(SendOutcome.CONNECTION_FAILED)).isEqualTo(Action.RETRY);
     }
@@ -66,6 +68,13 @@ class PolicyTest {
         assertThat(p.actionFor(SendOutcome.APPLICATION_REJECT)).isEqualTo(Action.DEAD_LETTER);
         assertThat(p.actionFor(SendOutcome.APPLICATION_ERROR)).isEqualTo(Action.RETRY);
         assertThat(AckPolicy.decode(p.encode())).isEqualTo(p);
+        // Commit codes have their own entries, independent of AE and AR.
+        AckPolicy commit = p.with(SendOutcome.COMMIT_REJECT, Action.RETRY)
+                .with(SendOutcome.COMMIT_ERROR, Action.DEAD_LETTER);
+        assertThat(commit.actionFor(SendOutcome.COMMIT_REJECT)).isEqualTo(Action.RETRY);
+        assertThat(commit.actionFor(SendOutcome.COMMIT_ERROR)).isEqualTo(Action.DEAD_LETTER);
+        assertThat(commit.actionFor(SendOutcome.APPLICATION_REJECT)).isEqualTo(Action.DEAD_LETTER);
+        assertThat(AckPolicy.decode(commit.encode())).isEqualTo(commit);
         assertThat(AckPolicy.decode("garbage,NOPE=RETRY,ACCEPTED=RETRY")).isEqualTo(AckPolicy.DEFAULT);
         assertThat(p.with(SendOutcome.APPLICATION_REJECT, Action.RETRY)
                 .with(SendOutcome.APPLICATION_ERROR, Action.DEAD_LETTER)).isEqualTo(AckPolicy.DEFAULT);

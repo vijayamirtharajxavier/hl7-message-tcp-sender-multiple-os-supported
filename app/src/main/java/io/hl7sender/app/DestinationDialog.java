@@ -88,6 +88,8 @@ final class DestinationDialog extends Dialog<DestinationDialog.Result> {
     private final TextField cbCoolDown;
     private final ComboBox<String> onReject = actionBox();
     private final ComboBox<String> onError = actionBox();
+    private final ComboBox<String> onCommitReject = actionBox();
+    private final ComboBox<String> onCommitError = actionBox();
     private final ComboBox<String> onTimeout = actionBox();
     private final TextField maxPerSecond;
     private final ComboBox<ValidationLevel> validationLevel =
@@ -174,6 +176,14 @@ final class DestinationDialog extends Dialog<DestinationDialog.Result> {
         onReject.setValue(label(d.ackPolicy().actionFor(SendOutcome.APPLICATION_REJECT)));
         onError.setId("destOnErrorBox");
         onError.setValue(label(d.ackPolicy().actionFor(SendOutcome.APPLICATION_ERROR)));
+        onCommitReject.setId("destOnCommitRejectBox");
+        onCommitReject.setValue(label(d.ackPolicy().actionFor(SendOutcome.COMMIT_REJECT)));
+        onCommitReject.setTooltip(new Tooltip("CR: the receiver does not accept the message type, version or "
+                + "processing ID, so resending the same message cannot help"));
+        onCommitError.setId("destOnCommitErrorBox");
+        onCommitError.setValue(label(d.ackPolicy().actionFor(SendOutcome.COMMIT_ERROR)));
+        onCommitError.setTooltip(new Tooltip("CE: the receiver could not commit the message for another reason, "
+                + "such as a sequence number error, which may clear"));
         onTimeout.setId("destOnTimeoutBox");
         onTimeout.setValue(label(d.ackPolicy().actionFor(SendOutcome.ACK_TIMEOUT)));
         error.setId("destErrorLabel");
@@ -196,7 +206,9 @@ final class DestinationDialog extends Dialog<DestinationDialog.Result> {
         grid.addRow(r++, Fields.label("Open after failures"), cbThreshold, Fields.label("Cool-down (ms)"),
                 cbCoolDown);
         grid.add(section("Acknowledgment policy"), 0, r++, 4, 1);
-        grid.addRow(r++, Fields.label("On AR / CR (reject)"), onReject, Fields.label("On AE / CE (error)"), onError);
+        grid.addRow(r++, Fields.label("On AR (reject)"), onReject, Fields.label("On AE (error)"), onError);
+        grid.addRow(r++, Fields.label("On CR (commit reject)"), onCommitReject, Fields.label("On CE (commit error)"),
+                onCommitError);
         grid.addRow(r++, Fields.label("On timeout / no ACK"), onTimeout);
         grid.add(section("Validation"), 0, r++, 4, 1);
         grid.addRow(r++, Fields.label("Level"), validationLevel);
@@ -365,7 +377,9 @@ final class DestinationDialog extends Dialog<DestinationDialog.Result> {
         try {
             AckPolicy policy = AckPolicy.DEFAULT
                     .with(SendOutcome.APPLICATION_REJECT, action(onReject))
-                    .with(SendOutcome.APPLICATION_ERROR, action(onError));
+                    .with(SendOutcome.APPLICATION_ERROR, action(onError))
+                    .with(SendOutcome.COMMIT_REJECT, action(onCommitReject))
+                    .with(SendOutcome.COMMIT_ERROR, action(onCommitError));
             for (SendOutcome o : new SendOutcome[] {SendOutcome.ACK_TIMEOUT, SendOutcome.CONNECTION_CLOSED,
                 SendOutcome.INVALID_ACK, SendOutcome.CONTROL_ID_MISMATCH}) {
                 policy = policy.with(o, action(onTimeout));

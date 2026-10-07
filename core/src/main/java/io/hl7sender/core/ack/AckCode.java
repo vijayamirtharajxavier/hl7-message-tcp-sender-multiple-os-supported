@@ -17,13 +17,17 @@ public enum AckCode {
     CE(Category.ERROR, true, "Commit Error"),
     CR(Category.REJECT, true, "Commit Reject");
 
-    /** What the code means for the sender, regardless of acknowledgment mode. */
+    /**
+     * The accept, error or reject family a code belongs to, used to pick the matching code in original or enhanced
+     * mode. Codes in one family do not mean the same thing to a sender: see
+     * {@link io.hl7sender.core.send.SendOutcome#of(AckCode)}.
+     */
     public enum Category {
-        /** The receiver accepted the message. */
+        /** AA or CA. */
         ACCEPT,
-        /** The receiver found a problem with the message content. Resending the same content will fail again. */
+        /** AE or CE. */
         ERROR,
-        /** The receiver rejected the message (unavailable, unsupported type, ...). A retry may succeed. */
+        /** AR or CR. */
         REJECT
     }
 

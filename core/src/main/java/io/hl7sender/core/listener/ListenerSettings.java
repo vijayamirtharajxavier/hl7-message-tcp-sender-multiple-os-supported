@@ -56,6 +56,11 @@ public record ListenerSettings(
                 saveFolder);
     }
 
+    public ListenerSettings withCommitCodes(boolean newCommitCodes) {
+        return new ListenerSettings(mode, delayMs, newCommitCodes, responseText, charset, maxFrameBytes, rules,
+                saveFolder);
+    }
+
     public ListenerSettings withDelayMs(int newDelayMs) {
         return new ListenerSettings(mode, newDelayMs, commitCodes, responseText, charset, maxFrameBytes, rules,
                 saveFolder);

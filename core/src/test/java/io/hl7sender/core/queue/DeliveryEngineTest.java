@@ -182,6 +182,24 @@ class DeliveryEngineTest {
     }
 
     @Test
+    void commitRejectGoesToDeadLetterAndCommitErrorIsRetried() throws Exception {
+        listener.updateSettings(listener.settings().withCommitCodes(true).withMode(ResponseMode.REJECT));
+        engine.start();
+        DestinationConfig d = destination(listener.port());
+        QueuedMessage rejected = enqueue(d);
+        awaitStatus(rejected, MessageStatus.DEAD_LETTER);
+        assertThat(reload(rejected).attempts()).isEqualTo(1);
+        assertThat(reload(rejected).lastOutcome()).contains(SendOutcome.COMMIT_REJECT.name());
+
+        listener.updateSettings(listener.settings().withMode(ResponseMode.ERROR));
+        QueuedMessage m = enqueue(d);
+        await("two commit errors", () -> store.attempts(m.id()).size() >= 2);
+        listener.updateSettings(listener.settings().withMode(ResponseMode.ACCEPT));
+        awaitStatus(m, MessageStatus.ACKNOWLEDGED);
+        assertThat(store.attempts(m.id())).extracting(a -> a.ackCode().orElse("")).endsWith("CA").contains("CE");
+    }
+
+    @Test
     void rejectCanBeConfiguredToDeadLetter() throws Exception {
         listener.updateSettings(listener.settings().withMode(ResponseMode.REJECT));
         engine.start();

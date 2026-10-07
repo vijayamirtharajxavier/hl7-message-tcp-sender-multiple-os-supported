@@ -12,12 +12,13 @@ import java.util.stream.Collectors;
  *
  * <ul>
  *   <li>AA/CA and sent-without-ACK: complete</li>
- *   <li>AE/CE (content error) and validation failures: dead-letter immediately</li>
- *   <li>AR/CR, timeouts, connection and protocol problems, mismatched or invalid ACKs: retry</li>
+ *   <li>AE (content error), CR (message type, version or processing ID not accepted) and validation failures:
+ *       dead-letter immediately, since resending the same message cannot help</li>
+ *   <li>AR, CE, timeouts, connection and protocol problems, mismatched or invalid ACKs: retry</li>
  * </ul>
  *
- * Retryable outcomes can be changed per destination, for example to dead-letter AR
- * straight away or to retry AE. Success outcomes and validation failures cannot be changed.
+ * AE, AR, CE, CR and the other retryable outcomes can each be changed per destination, for example to
+ * dead-letter AR straight away or to retry CR. Success outcomes and validation failures cannot be changed.
  */
 public final class AckPolicy {
 

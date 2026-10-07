@@ -6,8 +6,8 @@ package io.hl7sender.core.queue;
  * <pre>
  *  QUEUED ──▶ IN_FLIGHT ──▶ ACKNOWLEDGED        (AA/CA)
  *     ▲           │    └──▶ SENT_UNCONFIRMED    (no-ACK destination)
- *     │           ├───────▶ DEAD_LETTER         (AE/CE, validation, or retries exhausted)
- *     └── RETRY_PENDING ◀── (AR/CR, timeout, connection problems)
+ *     │           ├───────▶ DEAD_LETTER         (AE/CR, validation, or retries exhausted)
+ *     └── RETRY_PENDING ◀── (AR/CE, timeout, connection problems)
  * </pre>
  *
  * The state is written to the database before any network I/O happens, so a crash always leaves a

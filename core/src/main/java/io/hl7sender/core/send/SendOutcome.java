@@ -1,11 +1,18 @@
 package io.hl7sender.core.send;
 
+import io.hl7sender.core.ack.AckCode;
+
 /** Final result of one send attempt. */
 public enum SendOutcome {
     ACCEPTED(Severity.SUCCESS, false, "Accepted by the receiver"),
     SENT_NO_ACK(Severity.SUCCESS, false, "Sent; no acknowledgment expected"),
-    APPLICATION_ERROR(Severity.FAILURE, false, "Receiver reported an error in the message (AE/CE)"),
-    APPLICATION_REJECT(Severity.FAILURE, true, "Receiver rejected the message (AR/CR)"),
+    APPLICATION_ERROR(Severity.FAILURE, false, "Receiver reported an error in the message (AE)"),
+    APPLICATION_REJECT(Severity.FAILURE, true, "Receiver rejected the message (AR)"),
+    /** CE: the receiver could not commit the message for another reason (e.g. a sequence number error). */
+    COMMIT_ERROR(Severity.FAILURE, true, "Receiver could not commit the message (CE)"),
+    /** CR: the receiver does not accept the message type (MSH-9), version (MSH-12) or processing ID (MSH-11). */
+    COMMIT_REJECT(Severity.FAILURE, false,
+            "Receiver does not accept the message type, version or processing ID (CR)"),
     CONTROL_ID_MISMATCH(Severity.WARNING, true, "ACK refers to a different message control ID"),
     INVALID_ACK(Severity.WARNING, true, "Response is not a valid HL7 acknowledgment"),
     ACK_TIMEOUT(Severity.WARNING, true, "No acknowledgment received before the timeout"),
@@ -31,6 +38,21 @@ public enum SendOutcome {
         this.description = description;
     }
 
+    /**
+     * The outcome for an acknowledgment code. Commit codes have their own outcomes because HL7 v2 chapter 2 gives
+     * them different meanings from their original-mode namesakes: after CR, resending the same message cannot help,
+     * while a CE may clear.
+     */
+    public static SendOutcome of(AckCode code) {
+        return switch (code) {
+            case AA, CA -> ACCEPTED;
+            case AE -> APPLICATION_ERROR;
+            case AR -> APPLICATION_REJECT;
+            case CE -> COMMIT_ERROR;
+            case CR -> COMMIT_REJECT;
+        };
+    }
+
     public Severity severity() {
         return severity;
     }
@@ -51,7 +73,8 @@ public enum SendOutcome {
      */
     public boolean connectionReusable() {
         return switch (this) {
-            case ACCEPTED, SENT_NO_ACK, APPLICATION_ERROR, APPLICATION_REJECT, VALIDATION_FAILED -> true;
+            case ACCEPTED, SENT_NO_ACK, APPLICATION_ERROR, APPLICATION_REJECT, COMMIT_ERROR, COMMIT_REJECT,
+                 VALIDATION_FAILED -> true;
             default -> false;
         };
     }

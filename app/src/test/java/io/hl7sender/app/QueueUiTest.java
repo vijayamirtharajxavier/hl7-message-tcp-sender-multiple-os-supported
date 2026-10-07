@@ -6,12 +6,14 @@ import io.hl7sender.core.config.AppPaths;
 import io.hl7sender.core.listener.ListenerSettings;
 import io.hl7sender.core.listener.ResponseMode;
 import io.hl7sender.core.listener.TestListener;
+import io.hl7sender.core.queue.AckPolicy;
 import io.hl7sender.core.queue.DeliveryEngine;
 import io.hl7sender.core.queue.DestinationConfig;
 import io.hl7sender.core.queue.MessageStatus;
 import io.hl7sender.core.queue.RetryPolicy;
 import io.hl7sender.core.samples.SampleMessages;
 import io.hl7sender.core.send.SendOptions;
+import io.hl7sender.core.send.SendOutcome;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,6 +21,7 @@ import java.util.EnumSet;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import javafx.scene.Scene;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MenuButton;
@@ -175,12 +178,23 @@ class QueueUiTest {
             robot.lookup("#destPortField").queryAs(TextField.class).setText("6661");
             robot.lookup("#destMaxAttemptsField").queryAs(TextField.class).setText("4");
         });
+        // Commit codes have their own policy: CR is dead-lettered and CE retried by default.
+        @SuppressWarnings("unchecked")
+        ComboBox<String> onCommitReject = robot.lookup("#destOnCommitRejectBox").queryAs(ComboBox.class);
+        @SuppressWarnings("unchecked")
+        ComboBox<String> onCommitError = robot.lookup("#destOnCommitErrorBox").queryAs(ComboBox.class);
+        assertThat(onCommitReject.getValue()).isEqualTo(onCommitReject.getItems().get(1));
+        assertThat(onCommitError.getValue()).isEqualTo(onCommitError.getItems().get(0));
+        robot.interact(() -> onCommitReject.setValue(onCommitReject.getItems().get(0)));
         robot.clickOn("#destOkButton");
         await(() -> engine().destinations().size() == 1);
         DestinationConfig saved = engine().destinations().get(0);
         assertThat(saved.name()).isEqualTo("Mirth test");
         assertThat(saved.address()).isEqualTo("mirth.local:6661");
         assertThat(saved.retry().maxAttempts()).isEqualTo(4);
+        assertThat(saved.ackPolicy().actionFor(SendOutcome.COMMIT_REJECT)).isEqualTo(AckPolicy.Action.RETRY);
+        assertThat(saved.ackPolicy().actionFor(SendOutcome.COMMIT_ERROR)).isEqualTo(AckPolicy.Action.RETRY);
+        assertThat(saved.ackPolicy().actionFor(SendOutcome.APPLICATION_ERROR)).isEqualTo(AckPolicy.Action.DEAD_LETTER);
         assertThat(robot.lookup("#destinationList").queryAs(ListView.class).getItems().size()).isEqualTo(1);
     }
 

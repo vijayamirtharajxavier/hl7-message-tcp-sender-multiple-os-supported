@@ -56,7 +56,8 @@ Settings per destination:
   per-message connection, and **Wait for ACK** (turn it off only for receivers that never acknowledge).
 - **Retries**: attempts (10 by default, or unlimited), backoff from 2 seconds up to 5 minutes with jitter.
 - **Circuit breaker**: after 5 consecutive failures, pause for 60 seconds, then try one message.
-- **ACK handling**: retry or dead-letter after AR, AE and timeouts.
+- **ACK handling**: retry or dead-letter after AR, AE, CR, CE and timeouts. By default AE and CR go to the
+  dead-letter queue, because resending the same message cannot help, and AR, CE and timeouts are retried.
 - **Validation**: Lenient, Standard or Strict, plus an optional conformance profile.
 - **Rate limit** (messages per second), **folder watch** (see below), **TLS** (see below) and free-text notes.
 
@@ -72,7 +73,7 @@ Message states:
 | RETRY_PENDING | The last attempt failed; the next one is scheduled. |
 | ACKNOWLEDGED | Accepted (AA/CA). |
 | SENT_UNCONFIRMED | Sent to a destination without ACKs. |
-| DEAD_LETTER | Given up: an AE, the retry limit, or moved there by hand. Requeue it after fixing the cause. |
+| DEAD_LETTER | Given up: an AE or CR, the retry limit, or moved there by hand. Requeue it after fixing the cause. |
 
 Select a message to see its content, every attempt with its ACK and error, and its audit trail. Use **Pause**
 and **Resume** per destination, **Retry now** to skip the backoff, and **Move to dead letter** to unblock a queue

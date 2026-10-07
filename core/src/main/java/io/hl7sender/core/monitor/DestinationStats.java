@@ -44,9 +44,10 @@ public record DestinationStats(long destinationId, Instant windowStart, Instant 
         return count(SendOutcome.ACCEPTED) + count(SendOutcome.SENT_NO_ACK);
     }
 
-    /** Negative acknowledgments: AE/CE and AR/CR. */
+    /** Negative acknowledgments: AE, AR, CE and CR. */
     public int nacks() {
-        return count(SendOutcome.APPLICATION_ERROR) + count(SendOutcome.APPLICATION_REJECT);
+        return count(SendOutcome.APPLICATION_ERROR) + count(SendOutcome.APPLICATION_REJECT)
+                + count(SendOutcome.COMMIT_ERROR) + count(SendOutcome.COMMIT_REJECT);
     }
 
     /** Attempts with no usable ACK: timeouts, connection and protocol failures, wrong or invalid ACKs. */

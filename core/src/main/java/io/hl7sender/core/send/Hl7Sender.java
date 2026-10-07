@@ -188,11 +188,7 @@ public final class Hl7Sender {
         if (detail.isEmpty() && !ack.errors().isEmpty()) {
             detail = ack.errors().get(0).describe();
         }
-        return switch (ack.code().category()) {
-            case ACCEPT -> attempt.finish(SendOutcome.ACCEPTED, detail);
-            case ERROR -> attempt.finish(SendOutcome.APPLICATION_ERROR, detail);
-            case REJECT -> attempt.finish(SendOutcome.APPLICATION_REJECT, detail);
-        };
+        return attempt.finish(SendOutcome.of(ack.code()), detail);
     }
 
     private static String describe(IOException e) {

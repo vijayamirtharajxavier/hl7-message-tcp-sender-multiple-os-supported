@@ -38,8 +38,10 @@ Java runtime, so nothing else needs to be installed.
 |---|---|---|---|
 | `ACCEPTED` | green | AA / CA | - |
 | `SENT_NO_ACK` | green | sent in no-ACK mode | - |
-| `APPLICATION_ERROR` | red | AE / CE: the content was rejected | no retry, goes to the dead-letter queue |
-| `APPLICATION_REJECT` | red | AR / CR: the receiver refused it | retry |
+| `APPLICATION_ERROR` | red | AE: the content was rejected | no retry, goes to the dead-letter queue |
+| `APPLICATION_REJECT` | red | AR: the receiver refused it | retry |
+| `COMMIT_REJECT` | red | CR: the receiver does not accept the message type (MSH-9), version (MSH-12) or processing ID (MSH-11) | no retry, goes to the dead-letter queue |
+| `COMMIT_ERROR` | red | CE: the receiver could not commit it for another reason, such as a sequence number error | retry |
 | `CONTROL_ID_MISMATCH` | amber | ACK is for a different message | retry |
 | `INVALID_ACK` | amber | response is not an HL7 ACK | retry |
 | `ACK_TIMEOUT` | amber | no ACK within the timeout | retry |
@@ -54,7 +56,7 @@ Java runtime, so nothing else needs to be installed.
 - **Retry** with exponential backoff and jitter, and a maximum number of attempts (or unlimited). The same MSH-10 is used on every retry
   so the receiver can de-duplicate.
 - **Circuit breaker**: after N consecutive failures, delivery pauses for a cool-down period, then tries one probe message.
-- **Configurable ACK policy per destination**: retry or dead-letter on AR/CR, AE/CE, and timeout / invalid ACK.
+- **Configurable ACK policy per destination**: retry or dead-letter on AR, AE, CR, CE, and timeout / invalid ACK.
 - **Dead-letter queue**: inspect the ACK and ERR details, edit the message, re-queue, delete, or export to JSON.
 - **Crash recovery**: a message caught mid-send is retried on restart and flagged as a *possible duplicate*.
 - Persistent connections with automatic reconnect. The connection is dropped after any ambiguous response so a late ACK can
@@ -275,8 +277,8 @@ API it notices within 30 seconds). If nothing is running, `--wait` delivers from
 | 0 | Accepted (or sent with `--no-ack`) |
 | 1 | Invalid message, unreadable file, or some items could not be processed |
 | 2 | Invalid usage, including an unknown destination |
-| 3 | Application error (AE/CE) |
-| 4 | Application reject (AR/CR) |
+| 3 | Application error (AE) or commit error (CE) |
+| 4 | Application reject (AR) or commit reject (CR) |
 | 5 | Delivery unknown: timeout, connection closed, invalid or mismatched ACK |
 | 6 | Connection or protocol failure |
 | 7 | Queue unavailable: encrypted without its key, or `serve` while another process delivers |

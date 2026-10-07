@@ -14,8 +14,10 @@ and message content are never included, and anything in the logs that looks like
 |---|---|---|---|
 | Accepted (AA/CA) | green | complete | Delivered. |
 | Sent, no ACK expected | green | complete | **Wait for ACK** is off. Delivery is not confirmed. |
-| Application error (AE/CE) | red | dead-letter | The receiver read the message but its content is wrong. Resending the same message will fail again. |
-| Application reject (AR/CR) | red | retry | The receiver refused it for now: wrong version, processing ID, message type, or the interface is down. |
+| Application error (AE) | red | dead-letter | The receiver read the message but its content is wrong. Resending the same message will fail again. |
+| Application reject (AR) | red | retry | The receiver refused it for now: wrong version, processing ID, message type, or the interface is down. |
+| Commit reject (CR) | red | dead-letter | Enhanced mode: the receiver does not accept the message type (MSH-9), version (MSH-12) or processing ID (MSH-11). Resending the same message cannot help. |
+| Commit error (CE) | red | retry | Enhanced mode: the receiver could not commit the message for another reason, such as a sequence number error, which may clear. |
 | ACK timeout | amber | retry | No ACK before the timeout. The message **may** have been processed. |
 | Connection closed | amber | retry | The receiver closed the connection without an ACK. |
 | Invalid ACK | amber | retry | The response is not an HL7 ACK (no MSA segment, not MLLP-framed, HTML, ...). |
@@ -61,7 +63,9 @@ fix its ACK so MSA-2 echoes the message's MSH-10 (in Mirth, an auto-generated re
 
 **Invalid ACK.** Open the attempt and look at the raw response. HTML means an HTTP port; a response without
 MLLP framing means a raw TCP listener; a message without MSA is not an acknowledgment. Enhanced mode (MSH-15/16)
-receivers may send a commit ACK (CA) first; that is accepted.
+receivers may send a commit ACK (CA) first; that is accepted, and the message is complete. HL7 Sender does not
+yet match a later application ACK (AA/AE/AR sent by the receiver as a separate message when MSH-16 asks for one)
+back to the queued message, so check the receiver's own logs for application errors.
 
 **Messages pile up in RETRY_PENDING and the destination shows "circuit open".** After 5 consecutive failures
 the circuit breaker pauses the destination for 60 seconds, then tries one message. Fix the cause (receiver

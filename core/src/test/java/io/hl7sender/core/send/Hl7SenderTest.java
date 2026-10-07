@@ -105,6 +105,33 @@ class Hl7SenderTest {
     }
 
     @Test
+    void commitErrorAndRejectHaveTheirOwnOutcomes() {
+        listener.updateSettings(listener.settings().withCommitCodes(true).withMode(ResponseMode.ERROR));
+        SendResult ce = sender.send(destination, MESSAGE, SendOptions.DEFAULTS);
+        assertThat(ce.ack().orElseThrow().code()).isEqualTo(AckCode.CE);
+        assertThat(ce.outcome()).isEqualTo(SendOutcome.COMMIT_ERROR);
+        // CE is "any other reason", such as a sequence number error, which may clear.
+        assertThat(ce.outcome().retryable()).isTrue();
+
+        listener.updateSettings(listener.settings().withMode(ResponseMode.REJECT));
+        SendResult cr = sender.send(destination, MESSAGE, SendOptions.DEFAULTS);
+        assertThat(cr.ack().orElseThrow().code()).isEqualTo(AckCode.CR);
+        assertThat(cr.outcome()).isEqualTo(SendOutcome.COMMIT_REJECT);
+        // CR rejects MSH-9, MSH-11 or MSH-12, which resending the same message cannot fix.
+        assertThat(cr.outcome().retryable()).isFalse();
+    }
+
+    @Test
+    void everyAckCodeHasAnOutcome() {
+        assertThat(SendOutcome.of(AckCode.AA)).isEqualTo(SendOutcome.ACCEPTED);
+        assertThat(SendOutcome.of(AckCode.CA)).isEqualTo(SendOutcome.ACCEPTED);
+        assertThat(SendOutcome.of(AckCode.AE)).isEqualTo(SendOutcome.APPLICATION_ERROR);
+        assertThat(SendOutcome.of(AckCode.AR)).isEqualTo(SendOutcome.APPLICATION_REJECT);
+        assertThat(SendOutcome.of(AckCode.CE)).isEqualTo(SendOutcome.COMMIT_ERROR);
+        assertThat(SendOutcome.of(AckCode.CR)).isEqualTo(SendOutcome.COMMIT_REJECT);
+    }
+
+    @Test
     void mismatchedControlIdIsDetected() {
         SendResult r = sendWith(ResponseMode.WRONG_CONTROL_ID);
         assertThat(r.outcome()).isEqualTo(SendOutcome.CONTROL_ID_MISMATCH);
