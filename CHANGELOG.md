@@ -7,6 +7,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-07
+
+### Added
+- **Edit...** and **Delete...** on each destination card on the Dashboard, so a mistyped host or port can be fixed
+  (or the destination removed) without going to the Queue tab. Hidden for users whose role cannot change
+  settings.
+
+### Changed
+- The main window opens maximized, filling the screen at any resolution. The maximize button switches to a normal
+  window of 1280 x 860, or 90% of the screen if that is smaller.
+- Built with Gradle 9.8. The Gradle wrapper allows two minutes to download Gradle, so first builds on slow
+  connections no longer time out.
+- Updated libraries: Jackson 2.22.3, SLF4J 2.0.20, Angus Mail 2.0.5, JUnit 6.1.3 and AssertJ 3.27.7.
+
+### Fixed
+- On Linux, the main window is maximized again after a dialog closes (opening a dialog could leave it at its
+  normal size).
+- Dashboard cards no longer rebuild every few seconds when nothing changed, so clicks on their buttons are not
+  lost.
+
 ## [1.0.3] - 2026-10-07
 
 ### Fixed
@@ -89,7 +109,8 @@ The first public release. Everything below is new. HL7 Sender is released under 
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.3...main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.4...main
+[1.0.4]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.0...v1.0.1
