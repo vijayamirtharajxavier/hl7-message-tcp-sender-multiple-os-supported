@@ -26,7 +26,9 @@ import java.util.UUID;
  * <ul>
  *   <li>PID to Patient (identifiers, name, birth date, gender, address, phone), created only if no patient with the
  *       first identifier exists (conditional create)</li>
- *   <li>PV1 to Encounter, NK1 to RelatedPerson, AL1 to AllergyIntolerance, DG1 to Condition</li>
+ *   <li>PV1 to Encounter, NK1 to RelatedPerson, AL1 to AllergyIntolerance, DG1 to Condition. Outside ADT, a PV1
+ *       that carries only a visit number (PV1-19) becomes a reference to the Encounter by that identifier rather
+ *       than a new, nearly empty Encounter</li>
  *   <li>OBR with its OBX segments to DiagnosticReport and Observations (ORU); ORC/OBR to ServiceRequest (ORM, OML)</li>
  * </ul>
  *
@@ -79,7 +81,8 @@ public final class V2ToFhir {
     private final List<String> notes = new ArrayList<>();
     private final String seed;
     private String patientRef;
-    private String encounterRef;
+    /** How resources refer to the visit: a reference to the Encounter in the bundle, or a logical reference. */
+    private ObjectNode encounterReference;
 
     private V2ToFhir(ParsedMessage message) {
         this.message = message;
@@ -194,6 +197,17 @@ public final class V2ToFhir {
     }
 
     private void encounter(Segment pv1) {
+        String visit = comp(pv1.field(19), 1);
+        if (!visit.isEmpty() && !message.header().messageCode().equalsIgnoreCase("ADT") && onlyVisitNumber(pv1)) {
+            // Outside ADT the visit is usually managed elsewhere. Creating an Encounter would mean inventing a
+            // class (and status) the sender never stated, so refer to the existing one by its visit number.
+            encounterReference = NODES.objectNode();
+            encounterReference.put("type", "Encounter");
+            encounterReference.putObject("identifier").put("value", visit);
+            notes.add("PV1 has only a visit number (PV1-19): resources refer to Encounter " + visit
+                    + " by identifier instead of creating one");
+            return;
+        }
         ObjectNode e = resource("Encounter");
         String event = message.header().triggerEvent();
         e.put("status", event.equals("A03") ? "finished" : event.equals("A05") || event.equals("A14")
@@ -222,7 +236,6 @@ public final class V2ToFhir {
         }
         e.set("class", coding);
         subject(e, "subject");
-        String visit = comp(pv1.field(19), 1);
         if (!visit.isEmpty()) {
             e.putArray("identifier").addObject().put("value", visit);
         }
@@ -246,7 +259,25 @@ public final class V2ToFhir {
                 period.put("end", end);
             }
         }
-        encounterRef = add(e, null);
+        encounterReference = NODES.objectNode();
+        encounterReference.put("reference", add(e, null));
+    }
+
+    /** True if PV1 carries nothing this converter maps except the visit number. */
+    private static boolean onlyVisitNumber(Segment pv1) {
+        for (int field : new int[] {2, 3, 7, 44, 45}) {
+            if (!pv1.field(field).isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Sets {@code encounter} on {@code r} if the message has a visit. */
+    private void encounter(ObjectNode r) {
+        if (encounterReference != null) {
+            r.set("encounter", encounterReference.deepCopy());
+        }
     }
 
     private void relatedPerson(Segment nk1) {
@@ -308,9 +339,7 @@ public final class V2ToFhir {
         }
         c.set("code", code);
         subject(c, "subject");
-        if (encounterRef != null) {
-            c.putObject("encounter").put("reference", encounterRef);
-        }
+        encounter(c);
         String onset = dateTime(dg1.field(5));
         if (!onset.isEmpty()) {
             c.put("onsetDateTime", onset);
@@ -376,9 +405,7 @@ public final class V2ToFhir {
         }
         r.set("code", codeable(obr.field(4)));
         subject(r, "subject");
-        if (encounterRef != null) {
-            r.putObject("encounter").put("reference", encounterRef);
-        }
+        encounter(r);
         String requested = dateTime(obr.field(7));
         if (!requested.isEmpty()) {
             r.put("occurrenceDateTime", requested);
@@ -399,6 +426,7 @@ public final class V2ToFhir {
         r.put("status", resultStatus(obr.field(25)));
         r.set("code", codeable(obr.field(4)));
         subject(r, "subject");
+        encounter(r);
         String effective = dateTime(obr.field(7));
         if (!effective.isEmpty()) {
             r.put("effectiveDateTime", effective);
@@ -422,6 +450,7 @@ public final class V2ToFhir {
         o.put("status", resultStatus(obx.field(11)));
         o.set("code", codeable(obx.field(3)));
         subject(o, "subject");
+        encounter(o);
         String type = obx.field(2).toUpperCase(Locale.ROOT);
         String value = obx.field(5);
         switch (type) {

@@ -216,7 +216,10 @@ Patient (created only if no patient has the same identifier), PV1 an Encounter, 
 AllergyIntolerances, DG1 Conditions, an ORU a DiagnosticReport with Observations, and an ORM or OML a
 ServiceRequest. Segments that are not converted are listed. PV1-2 (patient class) I, O, E and P become the
 Encounter classes IMP, AMB, EMER and PRENC; any other value, or an empty PV1-2, becomes the null flavor `UNK`
-(unknown) with a note naming PV1-2, rather than a guessed class. The conversion covers the common fields of the HL7
+(unknown) with a note naming PV1-2, rather than a guessed class. Outside ADT messages, a PV1 that carries only a
+visit number (PV1-19) does not create an Encounter: the results, orders and conditions refer to the existing
+Encounter by that identifier instead, with a note saying so. Resources that have an `encounter` element
+(Observation, DiagnosticReport, ServiceRequest, Condition) refer to the visit either way. The conversion covers the common fields of the HL7
 v2-to-FHIR mappings; it is meant for previews, test data and simple feeds. `hl7send fhir convert` prints the same
 Bundle.
 

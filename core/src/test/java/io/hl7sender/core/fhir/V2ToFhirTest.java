@@ -127,6 +127,36 @@ class V2ToFhirTest {
     }
 
     @Test
+    void outsideAdtAVisitNumberAloneIsAReferenceNotANewEncounter() {
+        String oru = "MSH|^~\\&|LAB|L|R|H|20260101||ORU^R01^ORU_R01|X1|P|2.5.1\r"
+                + "PID|1||42^^^H^MR||DOE^JANE\r"
+                + "PV1|1||||||||||||||||||V100\r"
+                + "OBR|1||F1|718-7^Hemoglobin^LN\r"
+                + "OBX|1|NM|718-7^Hemoglobin^LN||13.5|g/dL|||||F\r";
+        V2ToFhir.Result r = V2ToFhir.convert(oru);
+        assertThat(r.resources()).doesNotContainKey("Encounter");
+        for (JsonNode resource : List.of(resources(r, "DiagnosticReport").get(0), resources(r, "Observation").get(0))) {
+            JsonNode encounter = resource.path("encounter");
+            assertThat(encounter.path("type").asText()).isEqualTo("Encounter");
+            assertThat(encounter.path("identifier").path("value").asText()).isEqualTo("V100");
+            assertThat(encounter.has("reference")).isFalse();
+        }
+        assertThat(r.notes()).containsExactly(
+                "PV1 has only a visit number (PV1-19): resources refer to Encounter V100 by identifier instead of "
+                        + "creating one");
+
+        // An ADT message is about the visit itself, so it still creates the Encounter.
+        V2ToFhir.Result adt = V2ToFhir.convert(oru.replace("ORU^R01^ORU_R01", "ADT^A08^ADT_A01"));
+        assertThat(adt.resources()).containsEntry("Encounter", 1);
+        // So does a PV1 with more than the visit number, and the results refer to it in the bundle.
+        V2ToFhir.Result full = V2ToFhir.convert(oru.replace("PV1|1||", "PV1|1|I|"));
+        assertThat(full.resources()).containsEntry("Encounter", 1);
+        String encounterUrl = full.bundle().path("entry").get(1).path("fullUrl").asText();
+        assertThat(resources(full, "Observation").get(0).path("encounter").path("reference").asText())
+                .isEqualTo(encounterUrl);
+    }
+
+    @Test
     void patientClassWithNoEquivalentBecomesNullFlavorUnknown() {
         String base = "MSH|^~\\&|A|B|C|D|20260101120000||ADT^A01|X1|P|2.5.1\r"
                 + "PID|1||42^^^H^MR||DOE^JANE\r"
