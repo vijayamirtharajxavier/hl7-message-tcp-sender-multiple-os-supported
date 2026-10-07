@@ -43,7 +43,7 @@ jobs:
       HAS_MAC_CERT: ${{ secrets.MAC_CERTIFICATE_P12 != '' }}
       HAS_NOTARY: ${{ secrets.APPLE_ID != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v4
         with:
@@ -232,7 +232,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
