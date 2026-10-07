@@ -140,7 +140,7 @@ class MonitoringUiTest {
         MainWindowUiTest.screenshot(robot, window, "18b-dashboard-actions");
 
         // Edit: the destination dialog opens with the card's settings; fixing the host updates the card.
-        robot.clickOn("#dash-" + d.id() + "-edit");
+        press(robot, "#dash-" + d.id() + "-edit");
         WaitForAsyncUtils.waitForFxEvents();
         assertThat(robot.lookup("#destNameField").queryAs(TextField.class).getText()).isEqualTo("Lab");
         robot.interact(() -> robot.lookup("#destHostField").queryAs(TextField.class).setText("lab.example.org"));
@@ -152,18 +152,28 @@ class MonitoringUiTest {
         assertThat(engine().destinations()).hasSize(1);
 
         // Delete: asks first; Cancel keeps it, OK removes it and its card.
-        robot.clickOn("#dash-" + d.id() + "-delete");
+        press(robot, "#dash-" + d.id() + "-delete");
         WaitForAsyncUtils.waitForFxEvents();
         robot.clickOn(robot.lookup((javafx.scene.Node n) -> n instanceof Button b
                 && "Cancel".equals(b.getText())).queryButton());
         WaitForAsyncUtils.waitForFxEvents();
         assertThat(engine().destinations()).hasSize(1);
-        robot.clickOn("#dash-" + d.id() + "-delete");
+        press(robot, "#dash-" + d.id() + "-delete");
         WaitForAsyncUtils.waitForFxEvents();
         robot.clickOn(robot.lookup((javafx.scene.Node n) -> n instanceof Button b
                 && "OK".equals(b.getText())).queryButton());
         await(() -> engine().destinations().isEmpty());
         await(() -> robot.lookup("#dashCard-" + d.id()).tryQuery().isEmpty());
+    }
+
+    /**
+     * Presses a dashboard card's button. The lookup and the press run in one JavaFX task: the dashboard rebuilds a
+     * card when its destination's state changes, and a button looked up before a rebuild is no longer on screen when
+     * the robot clicks it. It does not wait for the press to finish, since the button may open a modal dialog.
+     */
+    private static void press(FxRobot robot, String query) {
+        Platform.runLater(() -> robot.lookup(query).queryButton().fire());
+        WaitForAsyncUtils.waitForFxEvents();
     }
 
     @Test
