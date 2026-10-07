@@ -7,6 +7,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-07
+
+### Fixed
+- **Help > Check for updates** no longer cuts off its content: the window grows to fit the result, release notes
+  and buttons, can be resized, and shows the release notes as plain text instead of raw Markdown.
+
 ## [1.0.1] - 2026-10-07
 
 ### Changed
@@ -75,6 +81,7 @@ The first public release. Everything below is new. HL7 Sender is released under 
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.1...main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.2...main
+[1.0.2]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/releases/tag/v1.0.0
