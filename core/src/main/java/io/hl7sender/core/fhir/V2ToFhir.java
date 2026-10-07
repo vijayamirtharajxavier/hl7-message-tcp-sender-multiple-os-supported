@@ -30,9 +30,11 @@ import java.util.UUID;
  *   <li>OBR with its OBX segments to DiagnosticReport and Observations (ORU); ORC/OBR to ServiceRequest (ORM, OML)</li>
  * </ul>
  *
- * <p>Segments it does not map are listed in {@link Result#notes()}. Resource IDs are derived from the message
- * control ID, so converting the same message twice gives the same bundle. This is for previews, test data and
- * simple feeds, not a complete implementation of the guide.
+ * <p>Segments it does not map, and values it cannot map (such as a PV1-2 patient class with no
+ * {@code Encounter.class} equivalent, which becomes the null flavor {@code UNK}), are listed in
+ * {@link Result#notes()}. Resource IDs are derived from the message control ID, so converting the same message
+ * twice gives the same bundle. This is for previews, test data and simple feeds, not a complete implementation of
+ * the guide.
  */
 public final class V2ToFhir {
 
@@ -56,7 +58,7 @@ public final class V2ToFhir {
      *
      * @param bundle    the transaction Bundle
      * @param resources how many resources of each type, in bundle order, e.g. {@code Patient=1, Observation=3}
-     * @param notes     what was not converted, e.g. {@code Segment ZPI was not converted}
+     * @param notes     what was not converted, or converted as unknown, e.g. {@code Segment ZPI was not converted}
      */
     public record Result(ObjectNode bundle, Map<String, Integer> resources, List<String> notes) {
 
@@ -196,7 +198,8 @@ public final class V2ToFhir {
         String event = message.header().triggerEvent();
         e.put("status", event.equals("A03") ? "finished" : event.equals("A05") || event.equals("A14")
                 ? "planned" : event.equals("A11") ? "cancelled" : "in-progress");
-        String cls = switch (pv1.field(2).toUpperCase(Locale.ROOT)) {
+        String patientClass = pv1.field(2);
+        String cls = switch (patientClass.toUpperCase(Locale.ROOT)) {
             case "I" -> "IMP";
             case "O" -> "AMB";
             case "E" -> "EMER";
@@ -204,8 +207,19 @@ public final class V2ToFhir {
             default -> "";
         };
         ObjectNode coding = NODES.objectNode();
-        coding.put("system", "http://terminology.hl7.org/CodeSystem/v3-ActCode");
-        coding.put("code", cls.isEmpty() ? "AMB" : cls);
+        if (cls.isEmpty()) {
+            // Encounter.class is required (1..1). Rather than invent a class the sender never stated, say it is
+            // unknown with a code a receiver can filter on, and report the gap.
+            coding.put("system", "http://terminology.hl7.org/CodeSystem/v3-NullFlavor");
+            coding.put("code", "UNK");
+            coding.put("display", "unknown");
+            notes.add(patientClass.isEmpty() ? "PV1-2 (patient class) is empty: Encounter.class is UNK"
+                    : "PV1-2 (patient class) " + patientClass
+                            + " has no Encounter.class equivalent: Encounter.class is UNK");
+        } else {
+            coding.put("system", "http://terminology.hl7.org/CodeSystem/v3-ActCode");
+            coding.put("code", cls);
+        }
         e.set("class", coding);
         subject(e, "subject");
         String visit = comp(pv1.field(19), 1);

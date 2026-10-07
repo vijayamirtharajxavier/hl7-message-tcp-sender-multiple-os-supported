@@ -127,6 +127,31 @@ class V2ToFhirTest {
     }
 
     @Test
+    void patientClassWithNoEquivalentBecomesNullFlavorUnknown() {
+        String base = "MSH|^~\\&|A|B|C|D|20260101120000||ADT^A01|X1|P|2.5.1\r"
+                + "PID|1||42^^^H^MR||DOE^JANE\r"
+                + "PV1|1|%s|WARD^101^A||||||||||||||||V100\r";
+        String nullFlavor = "http://terminology.hl7.org/CodeSystem/v3-NullFlavor";
+
+        V2ToFhir.Result unknown = V2ToFhir.convert(base.formatted("U"));
+        JsonNode cls = resources(unknown, "Encounter").get(0).path("class");
+        assertThat(cls.path("system").asText()).isEqualTo(nullFlavor);
+        assertThat(cls.path("code").asText()).isEqualTo("UNK");
+        assertThat(unknown.notes()).containsExactly(
+                "PV1-2 (patient class) U has no Encounter.class equivalent: Encounter.class is UNK");
+
+        V2ToFhir.Result empty = V2ToFhir.convert(base.formatted(""));
+        assertThat(resources(empty, "Encounter").get(0).path("class").path("code").asText()).isEqualTo("UNK");
+        assertThat(empty.notes()).containsExactly("PV1-2 (patient class) is empty: Encounter.class is UNK");
+
+        V2ToFhir.Result outpatient = V2ToFhir.convert(base.formatted("O"));
+        JsonNode amb = resources(outpatient, "Encounter").get(0).path("class");
+        assertThat(amb.path("system").asText()).isEqualTo("http://terminology.hl7.org/CodeSystem/v3-ActCode");
+        assertThat(amb.path("code").asText()).isEqualTo("AMB");
+        assertThat(outpatient.notes()).isEmpty();
+    }
+
+    @Test
     void dates() {
         assertThat(V2ToFhir.date("19800101")).isEqualTo("1980-01-01");
         assertThat(V2ToFhir.date("198001")).isEqualTo("1980-01");
