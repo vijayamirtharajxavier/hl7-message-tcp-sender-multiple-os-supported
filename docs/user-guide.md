@@ -4,6 +4,20 @@ HL7 Sender sends HL7 v2 messages to a receiver (an EHR interface, Mirth Connect,
 TCP/MLLP, waits for the acknowledgment, and keeps unacknowledged messages in a durable queue until they are
 delivered. This guide covers the desktop app; the [README](../README.md#command-line-hl7send) covers `hl7send`.
 
+## How a message travels
+
+![HL7 Sender Road Map: a message comes in, is prepared, saved to the durable queue, delivered by the destination's worker to the receiver, and its ACK, matched by MSA-2, decides whether it is acknowledged, retried, dead-lettered or waits for an application ACK](images/hl7-sender-road-map.gif)
+
+1. **Messages in**: the Sender tab, file and batch import, a watch folder, schedules, `hl7send` and the REST API,
+   or responder follow-ups.
+2. **Prepare**: the message is validated, MSH-7 and MSH-10 can be stamped, and the destination's script runs.
+3. **Durable queue**: the message is saved before it is sent, in strict order per destination.
+4. **Delivery worker**: one message in flight per destination, with a rate limit, retries and a circuit breaker.
+5. **Receiver**: over MLLP, HTTP(S), a folder or FHIR R4.
+6. **Match the ACK**: MSA-2 must be the message's MSH-10. The ACK code and the destination's ACK policy decide
+   the outcome; in enhanced mode a later application ACK can complete or fail a waiting message (orange path).
+7. **See and act**: the Queue tab, Dashboard, alerts, logs, FHIR preview and load tests.
+
 ## Install
 
 Download the installer for your system from the
