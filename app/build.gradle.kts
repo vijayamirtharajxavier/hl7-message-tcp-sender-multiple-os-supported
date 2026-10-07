@@ -55,7 +55,7 @@ tasks.test {
 //
 // macOS signing: set MAC_SIGNING_IDENTITY (and optionally MAC_SIGNING_KEYCHAIN) in the environment.
 
-val cliRuntime: Configuration by configurations.creating {
+val cliRuntime: Configuration = configurations.create("cliRuntime") {
     isCanBeConsumed = false
     isCanBeResolved = true
     attributes {
@@ -90,7 +90,7 @@ fun jdkTool(name: String): String {
     return home.resolve("bin").resolve(if (isWindows) "$name.exe" else name).absolutePath
 }
 
-val stageJpackageInput by tasks.registering(Sync::class) {
+val stageJpackageInput = tasks.register<Sync>("stageJpackageInput") {
     description = "Collects the app and CLI jars and their dependencies for jpackage."
     from(tasks.jar)
     from(configurations.runtimeClasspath)
@@ -101,7 +101,7 @@ val stageJpackageInput by tasks.registering(Sync::class) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
-val jlinkRuntime by tasks.registering(Exec::class) {
+val jlinkRuntime = tasks.register<Exec>("jlinkRuntime") {
     description = "Builds a trimmed Java runtime with only the modules the app needs."
     val out = jpackageDir.get().dir("runtime").asFile
     inputs.property("modules", runtimeModules)
@@ -122,7 +122,7 @@ fun macSigningArgs(): List<String> {
     return args
 }
 
-val jpackageImage by tasks.registering(Exec::class) {
+val jpackageImage = tasks.register<Exec>("jpackageImage") {
     description = "Builds the application folder: the desktop app, the hl7send CLI and the Java runtime."
     group = "distribution"
     dependsOn(stageJpackageInput, jlinkRuntime)
@@ -161,7 +161,7 @@ val jpackageImage by tasks.registering(Exec::class) {
     }
 }
 
-val jpackageInstaller by tasks.registering(Exec::class) {
+val jpackageInstaller = tasks.register<Exec>("jpackageInstaller") {
     description = "Builds a native installer for this OS from the application folder."
     group = "distribution"
     dependsOn(jpackageImage)

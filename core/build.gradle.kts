@@ -28,7 +28,7 @@ tasks.processResources {
 }
 
 // Load tests (e.g. 10,000 messages) tagged "slow"; excluded from `test`, run in CI on Linux only.
-val slowTest by tasks.registering(Test::class) {
+val slowTest = tasks.register<Test>("slowTest") {
     description = "Runs long-running load tests tagged 'slow'."
     group = "verification"
     testClassesDirs = sourceSets["test"].output.classesDirs
