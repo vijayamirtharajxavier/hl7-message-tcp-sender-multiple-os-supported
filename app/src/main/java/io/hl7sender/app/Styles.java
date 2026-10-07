@@ -81,6 +81,7 @@ final class Styles {
         Window.getWindows().addListener((ListChangeListener<Window>) change -> {
             while (change.next()) {
                 for (Window w : change.getAddedSubList()) {
+                    AppIcons.apply(w);
                     if (w.getScene() != null) {
                         apply(w.getScene());
                     }

@@ -103,7 +103,8 @@ app/src/packaging/linux/build-appimage.sh 1.0.0 out/      # AppImage (needs appi
 The icons are generated; after changing `IconGen.java` run:
 
 ```bash
-java -Djava.awt.headless=true app/src/packaging/IconGen.java app/src/packaging
+java -Djava.awt.headless=true app/src/packaging/IconGen.java app/src/packaging \
+    app/src/main/resources/io/hl7sender/app/icon
 ```
 
 To build and smoke-test every installer without publishing anything, run the release workflow by hand

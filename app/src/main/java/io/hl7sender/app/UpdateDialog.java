@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import javafx.application.Platform;
 import javafx.application.HostServices;
 import javafx.concurrent.Task;
+import javafx.geometry.Rectangle2D;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -53,7 +54,6 @@ final class UpdateDialog extends Dialog<ButtonType> {
         initOwner(owner);
         setTitle(Messages.get("update.title"));
         setHeaderText(Messages.get("update.current", AppInfo.version()));
-        setResizable(true);
         result.setId("updateResultLabel");
         result.setWrapText(true);
         result.setMinHeight(Region.USE_PREF_SIZE);
@@ -134,7 +134,8 @@ final class UpdateDialog extends Dialog<ButtonType> {
 
     /**
      * Grows the window to fit what the check added. The dialog is sized when it opens, while it only says
-     * "Checking...", so without this the result, notes and buttons are cut off.
+     * "Checking...", so without this the result, notes and buttons are cut off. (The dialog is deliberately not
+     * resizable: under Linux window managers a resizable dialog opens at its minimum size.)
      */
     private void fitWindow() {
         Platform.runLater(() -> {
@@ -145,11 +146,16 @@ final class UpdateDialog extends Dialog<ButtonType> {
             // Wrapped text needs the height for the window's actual width, which sizeToScene() does not use.
             pane.applyCss();
             pane.layout();
-            double decorations = stage.getHeight() - pane.getScene().getHeight();
-            double wanted = pane.prefHeight(pane.getScene().getWidth()) + decorations;
-            double screen = Screen.getPrimary().getVisualBounds().getHeight() * 0.9;
+            Rectangle2D screen = Screen.getPrimary().getVisualBounds();
+            double frameW = stage.getWidth() - pane.getScene().getWidth();
+            double frameH = stage.getHeight() - pane.getScene().getHeight();
+            double width = Math.max(pane.getScene().getWidth(), pane.prefWidth(-1));
+            if (width + frameW > stage.getWidth()) {
+                stage.setWidth(Math.min(width + frameW, screen.getWidth() * 0.9));
+            }
+            double wanted = pane.prefHeight(width) + frameH;
             if (wanted > stage.getHeight()) {
-                stage.setHeight(Math.min(wanted, screen));
+                stage.setHeight(Math.min(wanted, screen.getHeight() * 0.9));
             }
         });
     }

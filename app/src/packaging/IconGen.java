@@ -1,4 +1,6 @@
-// Generates the application icons: java -Djava.awt.headless=true app/src/packaging/IconGen.java app/src/packaging
+// Generates the application icons:
+//   java -Djava.awt.headless=true app/src/packaging/IconGen.java app/src/packaging \
+//       app/src/main/resources/io/hl7sender/app/icon
 import java.awt.*;
 import java.awt.geom.*;
 import java.awt.image.BufferedImage;
@@ -154,6 +156,13 @@ public class IconGen {
         DataOutputStream c = new DataOutputStream(icns);
         c.writeBytes("icns"); c.writeInt(body.size() + 8); c.write(body.toByteArray());
         Files.write(dir.resolve("hl7-sender.icns"), icns.toByteArray());
+        // Window icons the running app sets on its windows (the taskbar and dock use them on Linux and Windows).
+        if (args.length > 1) {
+            Path res = Files.createDirectories(Path.of(args[1]));
+            for (int sz : new int[] {16, 24, 32, 48, 64, 128, 256}) {
+                Files.write(res.resolve("hl7-sender-" + sz + ".png"), png(draw(sz)));
+            }
+        }
     }
 
 }

@@ -170,6 +170,8 @@ val jpackageInstaller by tasks.registering(Exec::class) {
     val image = jpackageDir.get().dir("image").asFile
     val dest = jpackageDir.get().dir("installer").asFile
     inputs.dir(image)
+    // The Linux package scripts and desktop entry template, so editing them rebuilds the installer.
+    inputs.dir(packagingSrc)
     inputs.property("type", type)
     outputs.dir(dest)
     executable = jdkTool("jpackage")

@@ -26,6 +26,7 @@ Exec=hl7-sender
 Icon=hl7-sender
 Categories=Development;
 Terminal=false
+StartupWMClass=io.hl7sender.app.Hl7SenderApp
 DESKTOP
 # AppRun: the desktop app by default; "AppRun hl7send ..." (or a symlink named hl7send) runs the CLI.
 cat > "$APPDIR/AppRun" <<'APPRUN'

@@ -37,6 +37,7 @@ public final class Hl7SenderApp extends Application {
         Scene scene = new Scene(window, 1280, 860);
         Styles.apply(scene);
         stage.setTitle(AppInfo.NAME + " " + AppInfo.version());
+        AppIcons.apply(stage);
         stage.setMinWidth(900);
         stage.setMinHeight(600);
         stage.setScene(scene);
