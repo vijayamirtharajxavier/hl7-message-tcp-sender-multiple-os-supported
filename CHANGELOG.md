@@ -7,6 +7,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-07
+
+### Added
+- **Application ACKs in enhanced mode.** A destination can have an **Application ACK port**, on which HL7 Sender
+  listens for the receiver's later application ACKs. After a commit ACK (CA), a message whose MSH-16 is AL, ER or
+  SU waits in the new status `AWAITING_APP_ACK` without blocking the queue, until its application ACK arrives,
+  matched by MSA-2 = MSH-10:
+  - AA completes it; AE or AR sends it to the dead-letter queue without resending it, since the receiver already
+    has it.
+  - No application ACK before the destination's timeout (5 minutes by default) sends it to the dead-letter queue
+    as `APP_ACK_TIMEOUT`, except with MSH-16 ER, where silence means success (`APP_ACK_NOT_SENT`). An AA that
+    arrives after the timeout still completes the message.
+  - The application ACK appears in the message's history after the attempt it answers.
+  - Only the destination's own host and this computer may connect to the port; other connections are refused and
+    audited.
+- The Test Listener (and `hl7send listen --app-ack-port`) can send application ACKs back after a CA, following
+  MSH-16, to try this without a real receiver.
+- **Move to dead letter** also works on a message waiting for its application ACK.
+
+### Changed
+- The queue database moves to schema version 9 when 1.2.0 first opens it (SQLite and PostgreSQL). Earlier
+  versions cannot open it afterwards.
+
 ## [1.1.1] - 2026-10-07
 
 ### Fixed
@@ -139,7 +162,8 @@ The first public release. Everything below is new. HL7 Sender is released under 
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.1...main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.0...main
+[1.2.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.5...v1.1.0
 [1.0.5]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.0.4...v1.0.5
