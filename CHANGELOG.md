@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- The Destination dialog fits on small screens: its Connection and delivery tab scrolls, so the OK and Cancel
+  buttons are no longer pushed below the bottom of a 768 px or 800 px high screen.
+
 ## [1.1.0] - 2026-10-07
 
 ### Changed

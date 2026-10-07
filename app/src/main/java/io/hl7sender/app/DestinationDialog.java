@@ -221,7 +221,15 @@ final class DestinationDialog extends Dialog<DestinationDialog.Result> {
         grid.addRow(r++, Fields.label("Watch folder"), withBrowse(watchFolder, "Choose watch folder", true));
         GridPane.setColumnSpan(watchFolder.getParent(), 3);
 
-        Tab general = new Tab("Connection and delivery", grid);
+        // The form is taller than small screens (a 1366 x 768 laptop), so it scrolls rather than pushing the OK
+        // button off the screen. The rest of the dialog (title, tabs, error and buttons) needs about 240 px.
+        javafx.scene.control.ScrollPane generalScroll = new javafx.scene.control.ScrollPane(grid);
+        generalScroll.setId("destGeneralScroll");
+        generalScroll.setFitToWidth(true);
+        generalScroll.setHbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
+        generalScroll.setMaxHeight(Math.max(240, javafx.stage.Screen.getPrimary().getVisualBounds().getHeight()
+                - 240));
+        Tab general = new Tab("Connection and delivery", generalScroll);
         Tab security = new Tab("TLS", tlsPane());
         security.setId("destTlsTab");
         Tab notesTab = new Tab("Notes", new VBox(notes));
