@@ -427,7 +427,8 @@ final class QueuePane extends BorderPane {
     // ---------------------------------------------------------------------------------------------
     // Actions
 
-    private void editDestination(DestinationConfig existing) {
+    /** Opens the destination dialog for {@code existing} (or a new destination when null) and saves it. */
+    void editDestination(DestinationConfig existing) {
         DestinationDialog dialog = new DestinationDialog(window(), existing, engine);
         dialog.showAndWait().ifPresent(r -> {
             try {
@@ -505,7 +506,8 @@ final class QueuePane extends BorderPane {
         return all.size();
     }
 
-    private void deleteDestination(DestinationConfig d) {
+    /** Asks for confirmation, then deletes the destination with its messages and history. */
+    void deleteDestination(DestinationConfig d) {
         int pending = sum(store.counts(d.id()), PENDING);
         if (confirm("Delete destination '" + d.name() + "'?", "This permanently deletes the destination and all of "
                 + "its messages and history" + (pending > 0 ? ", including " + pending + " undelivered message(s)"

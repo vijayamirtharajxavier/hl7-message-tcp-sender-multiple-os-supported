@@ -1,6 +1,7 @@
 package io.hl7sender.app;
 
 import io.hl7sender.core.alert.AlertMonitor;
+import io.hl7sender.core.auth.Permission;
 import io.hl7sender.core.monitor.DestinationStats;
 import io.hl7sender.core.queue.DeliveryEngine;
 import io.hl7sender.core.queue.DestinationConfig;
@@ -24,6 +25,7 @@ import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.AccessibleRole;
+import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
@@ -70,6 +72,15 @@ final class DashboardPane extends BorderPane {
     /** Everything one card shows, gathered off the FX thread. */
     private record Row(DestinationConfig destination, DestinationState state, Map<MessageStatus, Integer> counts,
                        DestinationStats stats) {
+
+        /** True if the card would look the same: everything but the statistics window's moving bounds. */
+        boolean looksLike(Row other) {
+            return other != null && destination.equals(other.destination) && state.equals(other.state)
+                    && counts.equals(other.counts) && stats.outcomes().equals(other.stats.outcomes())
+                    && stats.avgLatencyMs() == other.stats.avgLatencyMs()
+                    && stats.maxLatencyMs() == other.stats.maxLatencyMs()
+                    && stats.acceptedPerMinute().equals(other.stats.acceptedPerMinute());
+        }
     }
 
     private static final int MAX_BARS = 60;
@@ -80,6 +91,9 @@ final class DashboardPane extends BorderPane {
     private final ComboBox<Window> windowBox = new ComboBox<>(FXCollections.observableArrayList(Window.values()));
     private final Label summary = new Label();
     private final FlowPane cards = new FlowPane(12, 12);
+    /** The cards on screen and what they show, so an unchanged card (and its buttons) is kept, not rebuilt. */
+    private final Map<Long, Row> shownRows = new java.util.HashMap<>();
+    private final Map<Long, VBox> shownCards = new java.util.HashMap<>();
     private final ListView<String> alertList = new ListView<>();
     private final Timeline ticker = new Timeline(new KeyFrame(Duration.seconds(5), e -> refresh()));
     private final PauseTransition debounce = new PauseTransition(Duration.millis(400));
@@ -87,6 +101,9 @@ final class DashboardPane extends BorderPane {
     private final QueueListener listener;
     private final Consumer<AlertMonitor.Raised> alertListener;
     private volatile boolean closed;
+
+    private Consumer<DestinationConfig> onEdit = d -> { };
+    private Consumer<DestinationConfig> onDelete = d -> { };
 
     DashboardPane(AppContext context) {
         this.context = context;
@@ -183,6 +200,12 @@ final class DashboardPane extends BorderPane {
     }
 
     /** Gathers statistics in the background and redraws the cards. */
+    /** What the Edit and Delete buttons on a destination's card do. */
+    void setDestinationActions(Consumer<DestinationConfig> edit, Consumer<DestinationConfig> delete) {
+        this.onEdit = edit;
+        this.onDelete = delete;
+    }
+
     void refresh() {
         if (engine == null || closed || !refreshing.compareAndSet(false, true)) {
             return;
@@ -216,11 +239,21 @@ final class DashboardPane extends BorderPane {
             pending += pending(r.counts());
             inFlight += r.counts().getOrDefault(MessageStatus.IN_FLIGHT, 0);
             dead += r.counts().getOrDefault(MessageStatus.DEAD_LETTER, 0);
-            built.add(card(r));
+            long id = r.destination().id();
+            VBox card = r.looksLike(shownRows.get(id)) ? shownCards.get(id) : card(r);
+            shownRows.put(id, r);
+            shownCards.put(id, card);
+            built.add(card);
         }
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        rows.forEach(r -> ids.add(r.destination().id()));
+        shownRows.keySet().retainAll(ids);
+        shownCards.keySet().retainAll(ids);
         summary.setText(rows.isEmpty() ? Messages.get("dashboard.empty")
                 : Messages.get("dashboard.summary", rows.size(), pending, inFlight, dead));
-        cards.getChildren().setAll(built);
+        if (!cards.getChildren().equals(built)) {
+            cards.getChildren().setAll(built);
+        }
     }
 
     private VBox card(Row r) {
@@ -274,6 +307,19 @@ final class DashboardPane extends BorderPane {
         Label sparkLabel = Fields.label(Messages.get("dashboard.sparkline", s.attempts()));
 
         VBox card = new VBox(6, header, address, grid, sparkLabel, spark);
+        if (context.can(Permission.CONFIGURE)) {
+            Button edit = new Button(Messages.get("dashboard.edit"));
+            edit.setId("dash-" + id + "-edit");
+            edit.setAccessibleText(Messages.get("dashboard.edit.accessible", d.name()));
+            edit.setOnAction(e -> onEdit.accept(d));
+            Button delete = new Button(Messages.get("dashboard.delete"));
+            delete.setId("dash-" + id + "-delete");
+            delete.setAccessibleText(Messages.get("dashboard.delete.accessible", d.name()));
+            delete.setOnAction(e -> onDelete.accept(d));
+            HBox actions = new HBox(6, edit, delete);
+            actions.setAlignment(Pos.CENTER_RIGHT);
+            card.getChildren().add(actions);
+        }
         card.setId("dashCard-" + id);
         card.getStyleClass().add("dashboard-card");
         card.setPrefWidth(340);

@@ -98,7 +98,8 @@ dates. If the connection fails, see [TLS handshake failures](troubleshooting.md#
 ## Watching delivery
 
 - **Dashboard**: per destination, the state, queue depth, dead letters, throughput, accept/NACK rates and ACK
-  latency.
+  latency. **Edit...** on a card changes the destination's settings (for example a mistyped host or port), and
+  **Delete...** removes it, with its messages and history, after asking you to confirm.
 - **History**: search all messages by destination, status, type, control ID, text, batch and date; export to
   CSV (no content) or JSON.
 - **Alerts** (**Tools > Alerts and notifications**): desktop notifications, a webhook (Slack/Teams) or e-mail when

@@ -132,6 +132,41 @@ class MonitoringUiTest {
     }
 
     @Test
+    void dashboardCardsEditAndDeleteTheirDestination(FxRobot robot) throws Exception {
+        DestinationConfig d = engine().saveDestination(DestinationConfig.of("Lab", "lab-typo.example.org", 2575)
+                .withPaused(true));
+        selectTab(robot, "dashboardTab");
+        await(() -> robot.lookup("#dash-" + d.id() + "-edit").tryQuery().isPresent());
+        MainWindowUiTest.screenshot(robot, window, "18b-dashboard-actions");
+
+        // Edit: the destination dialog opens with the card's settings; fixing the host updates the card.
+        robot.clickOn("#dash-" + d.id() + "-edit");
+        WaitForAsyncUtils.waitForFxEvents();
+        assertThat(robot.lookup("#destNameField").queryAs(TextField.class).getText()).isEqualTo("Lab");
+        robot.interact(() -> robot.lookup("#destHostField").queryAs(TextField.class).setText("lab.example.org"));
+        robot.clickOn("#destOkButton");
+        await(() -> engine().destinations().stream().anyMatch(x -> x.id() == d.id()
+                && x.host().equals("lab.example.org")));
+        await(() -> robot.lookup("#dash-" + d.id() + "-address").tryQuery().isPresent()
+                && text(robot, "#dash-" + d.id() + "-address").startsWith("lab.example.org:2575"));
+        assertThat(engine().destinations()).hasSize(1);
+
+        // Delete: asks first; Cancel keeps it, OK removes it and its card.
+        robot.clickOn("#dash-" + d.id() + "-delete");
+        WaitForAsyncUtils.waitForFxEvents();
+        robot.clickOn(robot.lookup((javafx.scene.Node n) -> n instanceof Button b
+                && "Cancel".equals(b.getText())).queryButton());
+        WaitForAsyncUtils.waitForFxEvents();
+        assertThat(engine().destinations()).hasSize(1);
+        robot.clickOn("#dash-" + d.id() + "-delete");
+        WaitForAsyncUtils.waitForFxEvents();
+        robot.clickOn(robot.lookup((javafx.scene.Node n) -> n instanceof Button b
+                && "OK".equals(b.getText())).queryButton());
+        await(() -> engine().destinations().isEmpty());
+        await(() -> robot.lookup("#dashCard-" + d.id()).tryQuery().isEmpty());
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void deadLetterRaisesANotificationAndIsListedOnTheDashboard(FxRobot robot) throws Exception {
         startListener(ResponseMode.ERROR);

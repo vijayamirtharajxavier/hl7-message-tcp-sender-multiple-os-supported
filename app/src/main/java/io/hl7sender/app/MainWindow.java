@@ -91,6 +91,14 @@ final class MainWindow extends BorderPane {
         this.queuePane = new QueuePane(context, this::setStatus);
         this.historyPane = new HistoryPane(context, this::setStatus);
         this.dashboardPane = new DashboardPane(context);
+        // Edit and Delete on a dashboard card do what the Queue tab's buttons do, then refresh the dashboard.
+        dashboardPane.setDestinationActions(d -> {
+            queuePane.editDestination(d);
+            dashboardPane.refresh();
+        }, d -> {
+            queuePane.deleteDestination(d);
+            dashboardPane.refresh();
+        });
         this.logsPane = new LogsPane(context, this::openLogFolder, this::chooseDiagnosticsFile);
         this.loadTestPane = new LoadTestPane(context, this::setStatus, senderPane::editorText);
 
