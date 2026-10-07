@@ -3,7 +3,11 @@ package io.hl7sender.app;
 import io.hl7sender.core.AppInfo;
 import io.hl7sender.core.config.AppSettings;
 import io.hl7sender.core.update.UpdateChecker;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
+import javafx.application.Platform;
 import javafx.application.HostServices;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -11,10 +15,15 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Dialog;
+import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.stage.Screen;
+import javafx.stage.Stage;
 import javafx.stage.Window;
 
 /**
@@ -22,6 +31,12 @@ import javafx.stage.Window;
  * is downloaded: a newer version is shown with its notes and a link to its download page.
  */
 final class UpdateDialog extends Dialog<ButtonType> {
+
+    private static final Pattern HTML_TAG = Pattern.compile("<[^>]+>");
+    private static final Pattern IMAGE = Pattern.compile("!\\[[^\\]]*]\\([^)]*\\)");
+    private static final Pattern LINK = Pattern.compile("\\[([^\\]]+)]\\([^)]*\\)");
+    private static final Pattern EMPHASIS = Pattern.compile("(\\*\\*|__)(.+?)\\1");
+    private static final Pattern TABLE_RULE = Pattern.compile("\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)*\\|?");
 
     private final AppContext context;
     private final HostServices hostServices;
@@ -38,14 +53,17 @@ final class UpdateDialog extends Dialog<ButtonType> {
         initOwner(owner);
         setTitle(Messages.get("update.title"));
         setHeaderText(Messages.get("update.current", AppInfo.version()));
+        setResizable(true);
         result.setId("updateResultLabel");
         result.setWrapText(true);
+        result.setMinHeight(Region.USE_PREF_SIZE);
         notes.setId("updateNotes");
         notes.setEditable(false);
         notes.setWrapText(true);
         notes.setPrefRowCount(8);
         notes.setVisible(false);
         notes.managedProperty().bind(notes.visibleProperty());
+        VBox.setVgrow(notes, Priority.ALWAYS);
         open.setId("updateOpenButton");
         open.setVisible(false);
         open.setOnAction(e -> {
@@ -69,6 +87,7 @@ final class UpdateDialog extends Dialog<ButtonType> {
                 new AppSettings.Updates(on, s.updates().lastCheckedMillis(), s.updates().skippedVersion()))));
         Label privacy = new Label(Messages.get("update.privacy"));
         privacy.setWrapText(true);
+        privacy.setMinHeight(Region.USE_PREF_SIZE);
         privacy.getStyleClass().add("field-label");
 
         VBox content = new VBox(8, result, notes, new HBox(8, open, skip), automatic, privacy);
@@ -89,8 +108,11 @@ final class UpdateDialog extends Dialog<ButtonType> {
             }
         };
         task.setOnSucceeded(e -> show(task.getValue()));
-        task.setOnFailed(e -> result.setText(Messages.get("update.failed", task.getException() == null ? "?"
-                : task.getException().getMessage())));
+        task.setOnFailed(e -> {
+            result.setText(Messages.get("update.failed", task.getException() == null ? "?"
+                    : task.getException().getMessage()));
+            fitWindow();
+        });
         context.executor().submit(task);
     }
 
@@ -98,13 +120,75 @@ final class UpdateDialog extends Dialog<ButtonType> {
         last = r;
         if (!r.newer()) {
             result.setText(Messages.get("update.latest", r.current()));
+            fitWindow();
             return;
         }
         result.setText(Messages.get("update.available", r.latest().version(), r.current()));
-        notes.setText(r.latest().notes());
-        notes.setVisible(!r.latest().notes().isBlank());
+        String text = plainNotes(r.latest().notes());
+        notes.setText(text);
+        notes.setVisible(!text.isBlank());
         open.setVisible(hostServices != null);
         skip.setVisible(true);
+        fitWindow();
+    }
+
+    /**
+     * Grows the window to fit what the check added. The dialog is sized when it opens, while it only says
+     * "Checking...", so without this the result, notes and buttons are cut off.
+     */
+    private void fitWindow() {
+        Platform.runLater(() -> {
+            DialogPane pane = getDialogPane();
+            if (pane.getScene() == null || !(pane.getScene().getWindow() instanceof Stage stage)) {
+                return;
+            }
+            // Wrapped text needs the height for the window's actual width, which sizeToScene() does not use.
+            pane.applyCss();
+            pane.layout();
+            double decorations = stage.getHeight() - pane.getScene().getHeight();
+            double wanted = pane.prefHeight(pane.getScene().getWidth()) + decorations;
+            double screen = Screen.getPrimary().getVisualBounds().getHeight() * 0.9;
+            if (wanted > stage.getHeight()) {
+                stage.setHeight(Math.min(wanted, screen));
+            }
+        });
+    }
+
+    /**
+     * Release notes are Markdown; shows them as readable plain text: no image or HTML tags, links as their text,
+     * no heading or emphasis marks, table rows as "cell: cell", and list items as bullets.
+     */
+    static String plainNotes(String markdown) {
+        List<String> out = new ArrayList<>();
+        String[] lines = markdown.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].strip();
+            if (TABLE_RULE.matcher(line).matches()) {
+                continue;
+            }
+            if (line.startsWith("|") && i + 1 < lines.length && TABLE_RULE.matcher(lines[i + 1].strip()).matches()) {
+                continue; // a table's header row
+            }
+            line = HTML_TAG.matcher(line).replaceAll("");
+            line = IMAGE.matcher(line).replaceAll("");
+            line = LINK.matcher(line).replaceAll("$1");
+            line = EMPHASIS.matcher(line).replaceAll("$2");
+            line = line.replace("`", "");
+            line = line.replaceFirst("^#{1,6}\\s+", "").replaceFirst("^>\\s?", "");
+            if (line.startsWith("|")) {
+                String[] cells = line.replaceAll("^\\||\\|$", "").split("\\|");
+                List<String> parts = new ArrayList<>();
+                for (String c : cells) {
+                    if (!c.isBlank()) {
+                        parts.add(c.strip());
+                    }
+                }
+                line = String.join(": ", parts);
+            }
+            line = line.replaceFirst("^[-*+]\\s+", "\u2022 ");
+            out.add(line.strip());
+        }
+        return String.join("\n", out).replaceAll("\n{3,}", "\n\n").strip();
     }
 
     /**

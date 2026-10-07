@@ -31,6 +31,12 @@ import org.testfx.util.WaitForAsyncUtils;
 @ExtendWith(ApplicationExtension.class)
 class UpdateCheckUiTest {
 
+    /** Release notes as GitHub returns them: Markdown with a link, an image tag, emphasis, code and a table. */
+    private static final String NOTES_JSON = "A small update to [HL7 Sender 1.0.0](https://example.org/1.0.0).\\n\\n"
+            + "<img src=\\\"https://example.org/icon.png\\\" width=\\\"128\\\">\\n\\n## Changed\\n\\n"
+            + "- **New icon.** Fields split by pipes, as in `MSH|^~\\\\&|`.\\n\\n## Install\\n\\n"
+            + "| System | File |\\n|---|---|\\n| Windows | `HL7.Sender-9.9.0.msi` |\\n";
+
     private AppContext context;
     private MainWindow window;
     private HttpServer server;
@@ -47,7 +53,7 @@ class UpdateCheckUiTest {
         server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/latest", ex -> {
             byte[] b = ("{\"tag_name\":\"v9.9.0\",\"html_url\":\"https://example.org/9.9.0\","
-                    + "\"body\":\"- Everything is faster\"}").getBytes(StandardCharsets.UTF_8);
+                    + "\"body\":\"" + NOTES_JSON + "\"}").getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(200, b.length);
             ex.getResponseBody().write(b);
             ex.close();
@@ -75,7 +81,20 @@ class UpdateCheckUiTest {
         WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> result.getText().startsWith("Version 9.9.0"));
         WaitForAsyncUtils.waitForFxEvents();
         assertThat(result.getText()).contains("(you have 1.0.0)");
-        assertThat(robot.lookup("#updateNotes").queryAs(TextArea.class).getText()).isEqualTo("- Everything is faster");
+        assertThat(robot.lookup("#updateNotes").queryAs(TextArea.class).getText()).isEqualTo("""
+                A small update to HL7 Sender 1.0.0.
+
+                Changed
+
+                \u2022 New icon. Fields split by pipes, as in MSH|^~\\&|.
+
+                Install
+
+                Windows: HL7.Sender-9.9.0.msi""");
+        // The window grew to fit the result, notes and buttons that arrived after it opened.
+        javafx.scene.control.DialogPane pane = (javafx.scene.control.DialogPane) result.getScene().getRoot();
+        assertThat(pane.getHeight()).isGreaterThanOrEqualTo(pane.prefHeight(pane.getWidth()) - 1);
+        assertThat(robot.lookup("#updateSkipButton").queryAs(Button.class).isVisible()).isTrue();
         MainWindowUiTest.screenshot(robot, result.getScene().getRoot(), "26-update");
 
         assertThat(context.settings().updates().checkAutomatically()).isFalse();
