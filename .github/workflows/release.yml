@@ -3,7 +3,8 @@ name: Release
 # Builds installers on each OS, installs and smoke-tests them on the (clean) runner, signs them when the signing
 # secrets are configured, and publishes a GitHub Release for tags like v1.2.3.
 #
-# Run it by hand (Actions > Release > Run workflow) to build and test installers without publishing anything.
+# Run it by hand (Actions > Release > Run workflow) to build and test installers, and check they all reach the
+# publish job, without publishing anything.
 #
 # Optional secrets (unsigned installers are built without them; the release notes then say so):
 #   WINDOWS_CERTIFICATE_PFX (base64), WINDOWS_CERTIFICATE_PASSWORD      Authenticode signing
@@ -227,7 +228,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: package
-    if: startsWith(github.ref, 'refs/tags/v')
+    # On a manual run this still downloads the installers and checks they are all there, but publishes nothing.
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -255,6 +256,7 @@ jobs:
           fi
 
       - name: Release notes from the commit history
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
@@ -263,6 +265,7 @@ jobs:
           OUTPUT: release-notes.md
 
       - name: Publish
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
           SIGNED_WINDOWS: ${{ secrets.WINDOWS_CERTIFICATE_PFX != '' }}
