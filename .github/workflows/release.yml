@@ -241,6 +241,19 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Check the installers are all there
+        run: |
+          ls -l dist
+          missing=""
+          for pattern in '*.msi' '*.dmg' '*.pkg' '*_amd64.deb' '*.x86_64.rpm' '*.AppImage' '*-linux-x64.tar.gz' \
+              'SHA256SUMS-Windows.txt' 'SHA256SUMS-macOS.txt' 'SHA256SUMS-Linux.txt'; do
+            compgen -G "dist/$pattern" > /dev/null || missing="$missing $pattern"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing from the downloaded installers:$missing"
+            exit 1
+          fi
+
       - name: Release notes from the commit history
         uses: orhun/git-cliff-action@v4
         with:
@@ -278,3 +291,12 @@ jobs:
           case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" dist/* --title "HL7 Sender ${GITHUB_REF_NAME#v}" \
             --notes-file notes.md $prerelease
+          # gh has been seen to exit 0 with some files not uploaded, so check the release itself.
+          expected=$(ls dist | wc -l)
+          uploaded=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '[.assets[] | select(.state == "uploaded")] | length')
+          if [ "$uploaded" -ne "$expected" ]; then
+            echo "::warning::The release has $uploaded of $expected files; uploading the rest"
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+            uploaded=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '[.assets[] | select(.state == "uploaded")] | length')
+            [ "$uploaded" -eq "$expected" ] || exit 1
+          fi
