@@ -48,7 +48,8 @@ final class HistoryPane extends BorderPane {
     /** Status filter choices. */
     enum StatusFilter {
         ALL("All statuses", EnumSet.noneOf(MessageStatus.class)),
-        PENDING("Pending", EnumSet.of(MessageStatus.QUEUED, MessageStatus.IN_FLIGHT, MessageStatus.RETRY_PENDING)),
+        PENDING("Pending", EnumSet.of(MessageStatus.QUEUED, MessageStatus.IN_FLIGHT, MessageStatus.RETRY_PENDING,
+                MessageStatus.AWAITING_APP_ACK)),
         DELIVERED("Delivered", EnumSet.of(MessageStatus.ACKNOWLEDGED, MessageStatus.SENT_UNCONFIRMED)),
         DEAD_LETTER("Dead letter", EnumSet.of(MessageStatus.DEAD_LETTER));
 

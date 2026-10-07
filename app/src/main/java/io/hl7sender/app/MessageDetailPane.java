@@ -36,7 +36,8 @@ final class MessageDetailPane extends TabPane {
 
         attemptsTable.setId(idPrefix.isEmpty() ? "attemptsTable" : idPrefix + "AttemptsTable");
         attemptsTable.setPlaceholder(new Label("No attempts yet"));
-        attemptsTable.getColumns().add(column("#", 40, a -> String.valueOf(a.attemptNo())));
+        attemptsTable.getColumns().add(column("#", 40,
+                a -> a.applicationAck() ? "app" : String.valueOf(a.attemptNo())));
         attemptsTable.getColumns().add(column("Started", 140, a -> QueuePane.formatTime(a.startedAt())));
         attemptsTable.getColumns().add(column("Outcome", 170, a -> a.outcome().orElse("in progress")));
         attemptsTable.getColumns().add(column("ACK", 50, a -> a.ackCode().orElse("")));

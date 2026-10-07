@@ -63,9 +63,14 @@ fix its ACK so MSA-2 echoes the message's MSH-10 (in Mirth, an auto-generated re
 
 **Invalid ACK.** Open the attempt and look at the raw response. HTML means an HTTP port; a response without
 MLLP framing means a raw TCP listener; a message without MSA is not an acknowledgment. Enhanced mode (MSH-15/16)
-receivers may send a commit ACK (CA) first; that is accepted, and the message is complete. HL7 Sender does not
-yet match a later application ACK (AA/AE/AR sent by the receiver as a separate message when MSH-16 asks for one)
-back to the queued message, so check the receiver's own logs for application errors.
+receivers send a commit ACK (CA) first; that is accepted. To also follow the application ACK that the receiver
+sends later (when MSH-16 asks for one), set the destination's **Application ACK port**; see the user guide.
+
+**Messages stay in AWAITING_APP_ACK, then go to the dead-letter queue as APP_ACK_TIMEOUT.** The receiver's
+application ACKs are not reaching HL7 Sender. Check that the receiver sends them to this computer's address and
+the destination's application ACK port, that the port is open in the firewall, and that the receiver connects from
+the destination's host: connections from other addresses are refused and listed in the destination's audit trail
+(Queue tab). If the receiver is set to MSH-16 ER, it only reports errors, and silence counts as success.
 
 **Messages pile up in RETRY_PENDING and the destination shows "circuit open".** After 5 consecutive failures
 the circuit breaker pauses the destination for 60 seconds, then tries one message. Fix the cause (receiver

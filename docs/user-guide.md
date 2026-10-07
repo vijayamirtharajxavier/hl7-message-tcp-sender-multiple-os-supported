@@ -58,6 +58,8 @@ Settings per destination:
 - **Circuit breaker**: after 5 consecutive failures, pause for 60 seconds, then try one message.
 - **ACK handling**: retry or dead-letter after AR, AE, CR, CE and timeouts. By default AE and CR go to the
   dead-letter queue, because resending the same message cannot help, and AR, CE and timeouts are retried.
+- **Application ACKs** (enhanced mode): an **Application ACK port** on which HL7 Sender listens for the
+  receiver's application ACKs, and how long to wait for each (see below).
 - **Validation**: Lenient, Standard or Strict, plus an optional conformance profile.
 - **Rate limit** (messages per second), **folder watch** (see below), **TLS** (see below) and free-text notes.
 
@@ -71,9 +73,10 @@ Message states:
 | QUEUED | Waiting to be sent. |
 | IN_FLIGHT | Being sent; waiting for the ACK. |
 | RETRY_PENDING | The last attempt failed; the next one is scheduled. |
-| ACKNOWLEDGED | Accepted (AA/CA). |
+| AWAITING_APP_ACK | Committed by the receiver (CA); waiting for the application ACK that MSH-16 asks for. It does not block the queue. |
+| ACKNOWLEDGED | Accepted (AA, or CA when no application ACK is expected). |
 | SENT_UNCONFIRMED | Sent to a destination without ACKs. |
-| DEAD_LETTER | Given up: an AE or CR, the retry limit, or moved there by hand. Requeue it after fixing the cause. |
+| DEAD_LETTER | Given up: an AE or CR, an AE or AR application ACK, no application ACK in time, the retry limit, or moved there by hand. Requeue it after fixing the cause. |
 
 Select a message to see its content, every attempt with its ACK and error, and its audit trail. Use **Pause**
 and **Resume** per destination, **Retry now** to skip the backoff, and **Move to dead letter** to unblock a queue
@@ -107,11 +110,43 @@ dates. If the connection fails, see [TLS handshake failures](troubleshooting.md#
   messages are dead-lettered, a destination stops delivering, or a certificate is about to expire.
 - **Logs** tab: the live application log. Message content is never logged.
 
+## Application ACKs (enhanced mode)
+
+In enhanced acknowledgment mode the receiver answers in two steps. First it returns a commit ACK (CA, CE or CR)
+on the same connection, meaning it has the message in safe storage. Later, if the message's MSH-16 asks for one,
+it sends the application's verdict (AA, AE or AR) as a separate message on a new connection to the sender.
+
+To follow these, set the destination's **Application ACK port** (0 = off) and **App ACK timeout**. HL7 Sender then
+listens on that port, and a message answered with CA waits as AWAITING_APP_ACK according to its MSH-16:
+
+| MSH-16 | Application ACK arrives | No application ACK before the timeout |
+|---|---|---|
+| AL (always) | AA: ACKNOWLEDGED. AE or AR: DEAD_LETTER. | DEAD_LETTER (`APP_ACK_TIMEOUT`) |
+| ER (errors only) | AE or AR: DEAD_LETTER. | ACKNOWLEDGED (`APP_ACK_NOT_SENT`): no news is good news |
+| SU (success only) | AA: ACKNOWLEDGED. | DEAD_LETTER (`APP_ACK_TIMEOUT`) |
+| NE or empty | - | The CA completes the message, as without a port. |
+
+The application ACK is matched to the message by MSA-2 = MSH-10, and is shown in the message's history after the
+attempt it answers. A message dead-lettered by an application ACK is not resent automatically, because the
+receiver already has it; fix the cause and re-queue it. If an AA arrives after the timeout, it still completes
+the message. A waiting message does not block the queue, and **Move to dead letter** stops waiting for it.
+
+Only the destination's own host (any of its addresses) and this computer may connect to the application ACK
+port; other connections are refused and recorded in the destination's audit trail. HL7 Sender answers each
+application ACK with CA (or AA if it has no MSH-15, and nothing if its MSH-15 is NE), and rejects anything that is
+not an acknowledgment. An ACK that matches no waiting message is answered and recorded in the audit trail. Open
+the port in the firewall of the computer running HL7 Sender.
+
 ## Testing without a receiver
 
 The **Test Listener** tab is a mock receiver. It can accept, return AE or AR, send the wrong control ID or a
 malformed response, stay silent, or close the connection, optionally after a delay, and can use TLS. Use it to
 see how your destination settings behave before connecting to a real system.
+
+To try application ACKs, tick **Enhanced mode (CA/CE/CR)** and enter the destination's application ACK port in
+**App ACK to port**, with the code to send (AA, AE or AR). After each CA, the listener sends that application ACK
+to the sender one second later, following the message's MSH-16. `hl7send listen --commit-codes --app-ack-port`
+does the same from the command line.
 
 ## Two-way simulation (responder rules)
 

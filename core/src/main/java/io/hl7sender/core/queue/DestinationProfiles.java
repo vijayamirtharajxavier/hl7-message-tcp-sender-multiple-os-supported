@@ -67,6 +67,10 @@ public final class DestinationProfiles {
             tls.put("verifyHostname", d.tls().verifyHostname());
             tls.put("protocols", d.tls().protocols());
             n.put("notes", d.notes());
+            if (d.appAckPort() > 0) {
+                n.put("appAckPort", d.appAckPort());
+                n.put("appAckTimeoutMs", d.appAckTimeoutMs());
+            }
             if (!d.script().isEmpty()) {
                 n.put("script", d.script());
             }
@@ -140,6 +144,8 @@ public final class DestinationProfiles {
                     tls.path("protocols").asText(TlsSettings.DEFAULT_PROTOCOLS));
             b.notes = n.path("notes").asText("");
             b.script = n.path("script").asText("");
+            b.appAckPort = n.path("appAckPort").asInt(0);
+            b.appAckTimeoutMs = n.path("appAckTimeoutMs").asInt(DestinationConfig.DEFAULT_APP_ACK_TIMEOUT_MS);
             b.transport = transport;
             b.transportOptions = options;
             if (!mllp) {

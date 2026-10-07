@@ -55,6 +55,19 @@ final class ListenCommand implements Callable<Integer> {
     @Option(names = "--commit-codes", description = "Use enhanced-mode CA/CE/CR instead of AA/AE/AR.")
     private boolean commitCodes;
 
+    @Option(names = "--app-ack-port", defaultValue = "0", paramLabel = "PORT",
+            description = "With --commit-codes: after each CA, send an application ACK to this port on the sender, as "
+                    + "the message's MSH-16 asks (AL always, ER only errors, SU only success). 0 = off.")
+    private int appAckPort;
+
+    @Option(names = "--app-ack-code", defaultValue = "AA", paramLabel = "CODE",
+            description = "Application ACK to send: AA, AE or AR (default: ${DEFAULT-VALUE}).")
+    private io.hl7sender.core.ack.AckCode appAckCode;
+
+    @Option(names = "--app-ack-delay", defaultValue = "1000", paramLabel = "MS",
+            description = "Wait this long after the CA before sending the application ACK (default: ${DEFAULT-VALUE}).")
+    private int appAckDelayMs;
+
     @Option(names = "--text", defaultValue = "", description = "MSA-3 text to include in responses.")
     private String text;
 
@@ -87,8 +100,21 @@ final class ListenCommand implements Callable<Integer> {
                 return ExitCodes.INVALID_INPUT;
             }
         }
+        ListenerSettings.AppAck appAck = null;
+        if (appAckPort != 0) {
+            if (!commitCodes) {
+                err.println("--app-ack-port needs --commit-codes: application ACKs follow a commit ACK (CA)");
+                return ExitCodes.USAGE;
+            }
+            try {
+                appAck = new ListenerSettings.AppAck(appAckPort, appAckCode, appAckDelayMs);
+            } catch (IllegalArgumentException e) {
+                err.println(e.getMessage());
+                return ExitCodes.USAGE;
+            }
+        }
         ListenerSettings settings = new ListenerSettings(mode, delayMs, commitCodes, text, charset,
-                Mllp.DEFAULT_MAX_FRAME_BYTES, rules, saveDir);
+                Mllp.DEFAULT_MAX_FRAME_BYTES, rules, saveDir, appAck);
         Workspace ws = null;
         if (rules.stream().anyMatch(r -> r.followUp() != null)) {
             ws = Workspace.open(Permission.SEND, "queue follow-up messages");

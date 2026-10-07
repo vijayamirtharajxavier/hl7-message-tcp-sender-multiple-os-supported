@@ -60,6 +60,7 @@ public final class DeliveryEngine implements AutoCloseable {
     private final Map<Long, Thread> threads = new ConcurrentHashMap<>();
     private final Map<Long, FolderWatcher> watchers = new ConcurrentHashMap<>();
     private final Map<Long, Thread> watcherThreads = new ConcurrentHashMap<>();
+    private final Map<Long, ApplicationAckListener> appAckListeners = new ConcurrentHashMap<>();
     private volatile long watchPollMillis = 2_000;
     private final List<QueueListener> listeners = new CopyOnWriteArrayList<>();
     private final List<Runnable> reloadHooks = new CopyOnWriteArrayList<>();
@@ -149,6 +150,7 @@ public final class DeliveryEngine implements AutoCloseable {
             if (workers.containsKey(d.id())) {
                 wake(d.id());
                 ensureWatcher(d);
+                ensureAppAckListener(d);
             } else {
                 startWorker(d);
             }
@@ -172,6 +174,8 @@ public final class DeliveryEngine implements AutoCloseable {
         }
         started = false;
         watchers.values().forEach(FolderWatcher::stop);
+        appAckListeners.values().forEach(ApplicationAckListener::close);
+        appAckListeners.clear();
         workers.values().forEach(DestinationWorker::stop);
         long deadline = System.currentTimeMillis() + STOP_TIMEOUT_MS;
         for (Thread t : threads.values()) {
@@ -231,6 +235,7 @@ public final class DeliveryEngine implements AutoCloseable {
                 } else {
                     w.wake();
                     ensureWatcher(saved);
+                    ensureAppAckListener(saved);
                 }
             }
         }
@@ -702,6 +707,57 @@ public final class DeliveryEngine implements AutoCloseable {
         Thread t = Thread.ofPlatform().daemon().name("delivery-" + d.id() + "-" + d.name()).start(w);
         threads.put(d.id(), t);
         ensureWatcher(d);
+        ensureAppAckListener(d);
+    }
+
+    /**
+     * Starts, restarts or stops the destination's application ACK listener to match its settings. If the port
+     * cannot be opened (already in use, say), the problem is logged and audited, and messages that wait for an
+     * application ACK time out.
+     */
+    private synchronized void ensureAppAckListener(DestinationConfig d) {
+        ApplicationAckListener existing = appAckListeners.get(d.id());
+        boolean wanted = started && d.matchesAppAcks();
+        if (existing != null && (!wanted || existing.port() != d.appAckPort())) {
+            appAckListeners.remove(d.id());
+            existing.close();
+            existing = null;
+        }
+        if (!wanted || existing != null) {
+            return;
+        }
+        ApplicationAckListener listener = new ApplicationAckListener(d.id(), d.appAckPort(), this);
+        try {
+            listener.start();
+            appAckListeners.put(d.id(), listener);
+        } catch (IOException e) {
+            String detail = "Cannot listen for application ACKs on port " + d.appAckPort() + ": " + e.getMessage();
+            LOG.error("Destination '{}': {}", d.name(), detail);
+            store.auditDestination(d.id(), QueueStore.ACTOR_ENGINE, detail);
+        }
+    }
+
+    /** True if the destination's application ACK listener is running. */
+    public boolean isListeningForAppAcks(long destinationId) {
+        return appAckListeners.containsKey(destinationId);
+    }
+
+    /**
+     * Applies an application ACK from a destination's receiver to the message it acknowledges (see
+     * {@link QueueStore#applyApplicationAck}). Used by the destination's application ACK listener.
+     */
+    Optional<QueuedMessage> applyApplicationAck(long destinationId, io.hl7sender.core.ack.ParsedAck ack,
+                                                String source) {
+        Optional<QueuedMessage> m = store.applyApplicationAck(destinationId, ack, source);
+        if (m.isPresent()) {
+            LOG.info("Application ACK {} from {} for [{}]: message is now {}", ack.code(), source, ack.controlId(),
+                    m.get().status());
+            fireQueueChanged(destinationId);
+        } else {
+            LOG.warn("Application ACK {} from {} for [{}] matches no waiting message of destination {}", ack.code(),
+                    source, ack.controlId(), destinationId);
+        }
+        return m;
     }
 
     /** Starts a folder watcher if the destination has a watch folder and none is running. */
@@ -719,6 +775,10 @@ public final class DeliveryEngine implements AutoCloseable {
     }
 
     private void stopWorker(long destinationId) {
+        ApplicationAckListener appAcks = appAckListeners.remove(destinationId);
+        if (appAcks != null) {
+            appAcks.close();
+        }
         FolderWatcher watcher = watchers.remove(destinationId);
         Thread watcherThread = watcherThreads.remove(destinationId);
         if (watcher != null) {

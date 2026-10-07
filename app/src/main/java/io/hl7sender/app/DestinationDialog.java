@@ -92,6 +92,8 @@ final class DestinationDialog extends Dialog<DestinationDialog.Result> {
     private final ComboBox<String> onCommitError = actionBox();
     private final ComboBox<String> onTimeout = actionBox();
     private final TextField maxPerSecond;
+    private final TextField appAckPort;
+    private final TextField appAckTimeout;
     private final ComboBox<ValidationLevel> validationLevel =
             new ComboBox<>(FXCollections.observableArrayList(ValidationLevel.values()));
     private final TextField profilePath = new TextField();
@@ -142,6 +144,13 @@ final class DestinationDialog extends Dialog<DestinationDialog.Result> {
         cbCoolDown = Fields.integer("destCbCoolDownField", (int) d.circuitBreaker().coolDownMs(), 9, 7);
         maxPerSecond = Fields.integer("destMaxPerSecondField", d.maxPerSecond(), 5, 5);
         maxPerSecond.setTooltip(new Tooltip("Maximum messages per second; 0 = as fast as the receiver acknowledges"));
+        appAckPort = Fields.integer("destAppAckPortField", d.appAckPort(), 5, 5);
+        appAckPort.setTooltip(new Tooltip("Enhanced mode: HL7 Sender listens on this port for the receiver's "
+                + "application ACKs. After a CA, a message whose MSH-16 is AL, ER or SU waits for its application "
+                + "ACK. 0 = off: CA completes the message"));
+        appAckTimeout = Fields.integer("destAppAckTimeoutField", d.appAckTimeoutMs() / 1000, 6, 5);
+        appAckTimeout.setTooltip(new Tooltip("How long a message waits for its application ACK. Then it goes to "
+                + "the dead-letter queue, or, with MSH-16 ER, counts as accepted"));
         validationLevel.setId("destValidationLevelBox");
         validationLevel.setValue(d.validationLevel());
         profilePath.setId("destProfileField");
@@ -210,6 +219,8 @@ final class DestinationDialog extends Dialog<DestinationDialog.Result> {
         grid.addRow(r++, Fields.label("On CR (commit reject)"), onCommitReject, Fields.label("On CE (commit error)"),
                 onCommitError);
         grid.addRow(r++, Fields.label("On timeout / no ACK"), onTimeout);
+        grid.addRow(r++, Fields.label("Application ACK port"), appAckPort, Fields.label("App ACK timeout (s)"),
+                appAckTimeout);
         grid.add(section("Validation"), 0, r++, 4, 1);
         grid.addRow(r++, Fields.label("Level"), validationLevel);
         GridPane.setColumnSpan(validationLevel, 3);
@@ -420,7 +431,9 @@ final class DestinationDialog extends Dialog<DestinationDialog.Result> {
                     tlsSettings(),
                     original == null ? "" : original.secretRef(),
                     notes.getText() == null ? "" : notes.getText()).withScript(script.getText() == null ? ""
-                    : script.getText().strip()).withTransport(transportBox.getValue().id(), transportOptions());
+                    : script.getText().strip()).withTransport(transportBox.getValue().id(), transportOptions())
+                    .withAppAck(Fields.parse(appAckPort, "Application ACK port", 0, 65_535),
+                            Fields.parse(appAckTimeout, "Application ACK timeout", 1, 604_800) * 1000);
             try {
                 engine.transports().validate(d.transport(), d.transportOptions());
             } catch (IllegalArgumentException e) {

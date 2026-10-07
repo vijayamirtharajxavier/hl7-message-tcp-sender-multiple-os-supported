@@ -282,6 +282,7 @@ final class DashboardPane extends BorderPane {
 
         int depth = pending(r.counts());
         int inFlight = r.counts().getOrDefault(MessageStatus.IN_FLIGHT, 0);
+        int awaiting = r.counts().getOrDefault(MessageStatus.AWAITING_APP_ACK, 0);
         int dead = r.counts().getOrDefault(MessageStatus.DEAD_LETTER, 0);
         String throughput = String.format(Messages.locale(), "%.1f", s.throughputPerMinute());
         String accept = percent(s.acceptRate());
@@ -293,7 +294,8 @@ final class DashboardPane extends BorderPane {
         grid.setHgap(18);
         grid.setVgap(2);
         metric(grid, 0, 0, id, "depth", Messages.get("dashboard.depth"), String.valueOf(depth));
-        metric(grid, 1, 0, id, "inflight", Messages.get("dashboard.inflight"), String.valueOf(inFlight));
+        metric(grid, 1, 0, id, "inflight", Messages.get("dashboard.inflight"), awaiting == 0 ? String.valueOf(inFlight)
+                : Messages.get("dashboard.inflight.awaiting", inFlight, awaiting));
         metric(grid, 2, 0, id, "dead", Messages.get("dashboard.dead"), String.valueOf(dead));
         metric(grid, 0, 2, id, "throughput", Messages.get("dashboard.throughput"), throughput);
         metric(grid, 1, 2, id, "accepted", Messages.get("dashboard.accepted"), accept);

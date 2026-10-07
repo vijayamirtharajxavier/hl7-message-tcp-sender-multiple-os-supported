@@ -42,6 +42,10 @@ import java.util.function.Consumer;
  * @param transport        how messages are sent: {@code mllp} (host and port), or a transport such as {@code http}
  *                         or {@code file}; see {@code Transports}
  * @param transportOptions the transport's settings, e.g. {@code url} for HTTP; empty for MLLP
+ * @param appAckPort       port on which HL7 Sender listens for this receiver's application ACKs (enhanced mode), or
+ *                         0 for none. With a port, a message answered with CA whose MSH-16 is AL, ER or SU waits for
+ *                         its application ACK; without one, CA completes it.
+ * @param appAckTimeoutMs  how long such a message waits for its application ACK
  */
 public record DestinationConfig(
         long id,
@@ -66,7 +70,9 @@ public record DestinationConfig(
         String notes,
         String script,
         String transport,
-        Map<String, String> transportOptions) {
+        Map<String, String> transportOptions,
+        int appAckPort,
+        int appAckTimeoutMs) {
 
     public DestinationConfig {
         Objects.requireNonNull(ackMode, "ackMode");
@@ -101,10 +107,31 @@ public record DestinationConfig(
         secretRef = secretRef == null ? "" : secretRef.trim();
         notes = notes == null ? "" : notes;
         script = script == null ? "" : script;
+        if (appAckPort < 0 || appAckPort > 65_535) {
+            throw new IllegalArgumentException("Application ACK port must be between 0 and 65535");
+        }
+        if (appAckTimeoutMs < 1_000) {
+            throw new IllegalArgumentException("Application ACK timeout must be at least 1 second");
+        }
     }
 
     /** The built-in MLLP/TCP transport. */
     public static final String MLLP = "mllp";
+
+    /** Default wait for an application ACK: 5 minutes. */
+    public static final int DEFAULT_APP_ACK_TIMEOUT_MS = 300_000;
+
+    /** A destination without application ACK matching. */
+    public DestinationConfig(long id, String name, String host, int port, int connectTimeoutMs, int ackTimeoutMs,
+                             String charset, AckMode ackMode, ConnectionMode connectionMode, RetryPolicy retry,
+                             CircuitBreakerSettings circuitBreaker, AckPolicy ackPolicy, boolean paused,
+                             int maxPerSecond, ValidationLevel validationLevel, String profilePath,
+                             String watchFolder, TlsSettings tls, String secretRef, String notes, String script,
+                             String transport, Map<String, String> transportOptions) {
+        this(id, name, host, port, connectTimeoutMs, ackTimeoutMs, charset, ackMode, connectionMode, retry,
+                circuitBreaker, ackPolicy, paused, maxPerSecond, validationLevel, profilePath, watchFolder, tls,
+                secretRef, notes, script, transport, transportOptions, 0, DEFAULT_APP_ACK_TIMEOUT_MS);
+    }
 
     /** An MLLP destination without a transform script. */
     public DestinationConfig(long id, String name, String host, int port, int connectTimeoutMs, int ackTimeoutMs,
@@ -261,6 +288,19 @@ public record DestinationConfig(
         return (tls.enabled() ? "tls://" : "") + address();
     }
 
+    /** Listens for application ACKs on {@code port} (0 = off) and waits up to {@code timeoutMs} for each. */
+    public DestinationConfig withAppAck(int port, int timeoutMs) {
+        return with(b -> {
+            b.appAckPort = port;
+            b.appAckTimeoutMs = timeoutMs;
+        });
+    }
+
+    /** True if messages may wait for application ACKs on {@link #appAckPort()}. */
+    public boolean matchesAppAcks() {
+        return appAckPort > 0 && isMllp();
+    }
+
     public DestinationConfig withTransport(String id, Map<String, String> options) {
         return with(b -> {
             b.transport = id;
@@ -293,6 +333,8 @@ public record DestinationConfig(
         public String script;
         public String transport;
         public Map<String, String> transportOptions;
+        public int appAckPort;
+        public int appAckTimeoutMs;
 
         Builder(DestinationConfig d) {
             id = d.id;
@@ -318,12 +360,15 @@ public record DestinationConfig(
             script = d.script;
             transport = d.transport;
             transportOptions = d.transportOptions;
+            appAckPort = d.appAckPort;
+            appAckTimeoutMs = d.appAckTimeoutMs;
         }
 
         DestinationConfig build() {
             return new DestinationConfig(id, name, host, port, connectTimeoutMs, ackTimeoutMs, charset, ackMode,
                     connectionMode, retry, circuitBreaker, ackPolicy, paused, maxPerSecond, validationLevel,
-                    profilePath, watchFolder, tls, secretRef, notes, script, transport, transportOptions);
+                    profilePath, watchFolder, tls, secretRef, notes, script, transport, transportOptions, appAckPort,
+                    appAckTimeoutMs);
         }
     }
 }

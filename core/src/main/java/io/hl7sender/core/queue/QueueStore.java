@@ -333,12 +333,13 @@ public final class QueueStore implements AutoCloseable {
                         + "retry_max_attempts, retry_base_ms, retry_max_ms, retry_jitter, cb_failure_threshold, "
                         + "cb_cool_down_ms, ack_policy, paused, max_per_second, validation_level, profile_path, "
                         + "watch_folder, tls_enabled, tls_trust_path, tls_key_path, tls_verify_hostname, "
-                        + "tls_protocols, secret_ref, notes, script, transport, transport_options, created_at, "
-                        + "updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        + "tls_protocols, secret_ref, notes, script, transport, transport_options, app_ack_port, "
+                        + "app_ack_timeout_ms, created_at, updated_at) "
+                        + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         Statement.RETURN_GENERATED_KEYS)) {
                     bindDestination(ps, d);
-                    ps.setLong(31, now);
-                    ps.setLong(32, now);
+                    ps.setLong(33, now);
+                    ps.setLong(34, now);
                     ps.executeUpdate();
                     long id = generatedKey(ps);
                     insertAudit(null, id, null, null, userActor, "Destination '" + d.name() + "' created ("
@@ -352,10 +353,10 @@ public final class QueueStore implements AutoCloseable {
                     + "cb_cool_down_ms=?, ack_policy=?, paused=?, max_per_second=?, validation_level=?, "
                     + "profile_path=?, watch_folder=?, tls_enabled=?, tls_trust_path=?, tls_key_path=?, "
                     + "tls_verify_hostname=?, tls_protocols=?, secret_ref=?, notes=?, script=?, transport=?, "
-                    + "transport_options=?, updated_at=? WHERE id=?")) {
+                    + "transport_options=?, app_ack_port=?, app_ack_timeout_ms=?, updated_at=? WHERE id=?")) {
                 bindDestination(ps, d);
-                ps.setLong(31, now);
-                ps.setLong(32, d.id());
+                ps.setLong(33, now);
+                ps.setLong(34, d.id());
                 if (ps.executeUpdate() == 0) {
                     throw new QueueException("Destination " + d.id() + " does not exist");
                 }
@@ -624,6 +625,28 @@ public final class QueueStore implements AutoCloseable {
     public synchronized void completeAttempt(long messageId, long attemptId, SendResult result,
                                              MessageStatus newStatus, Instant nextAttemptAt,
                                              boolean possibleDuplicate, String reason) {
+        completeAttempt(messageId, attemptId, result, newStatus, nextAttemptAt, possibleDuplicate, reason, null);
+    }
+
+    /**
+     * What a message committed with CA waits for: its MSH-16 ({@code AL}, {@code ER} or {@code SU}) and when the
+     * wait ends.
+     */
+    public record AppAckWait(String mode, Instant dueAt) {
+    }
+
+    /** Last outcome of a message whose application ACK did not arrive in time (MSH-16 AL or SU). */
+    public static final String APP_ACK_TIMEOUT = "APP_ACK_TIMEOUT";
+    /** Last outcome of a message with MSH-16 ER whose wait ended without an error: no news is good news. */
+    public static final String APP_ACK_NOT_SENT = "APP_ACK_NOT_SENT";
+
+    /**
+     * As {@link #completeAttempt(long, long, SendResult, MessageStatus, Instant, boolean, String)}, and, when
+     * {@code newStatus} is {@link MessageStatus#AWAITING_APP_ACK}, records what the message waits for.
+     */
+    public synchronized void completeAttempt(long messageId, long attemptId, SendResult result,
+                                             MessageStatus newStatus, Instant nextAttemptAt,
+                                             boolean possibleDuplicate, String reason, AppAckWait wait) {
         long now = clock.millis();
         tx(() -> {
             execute("UPDATE attempt SET finished_at = ?, outcome = ?, detail = ?, connect_ms = ?, round_trip_ms = ? "
@@ -654,7 +677,7 @@ public final class QueueStore implements AutoCloseable {
             // CASE rather than the two-argument MAX, which PostgreSQL does not have.
             execute("UPDATE message SET status = ?, next_attempt_at = ?, possible_duplicate = "
                     + "CASE WHEN ? = 1 THEN 1 ELSE possible_duplicate END, last_outcome = ?, last_error = ?, "
-                    + "updated_at = ?, completed_at = ? "
+                    + "updated_at = ?, completed_at = ?, app_ack_mode = ?, app_ack_due_at = ? "
                     + "WHERE id = ?", ps -> {
                         ps.setString(1, newStatus.name());
                         ps.setLong(2, nextAttemptAt.toEpochMilli());
@@ -668,7 +691,9 @@ public final class QueueStore implements AutoCloseable {
                         } else {
                             ps.setNull(7, Types.INTEGER);
                         }
-                        ps.setLong(8, messageId);
+                        ps.setString(8, wait == null ? null : wait.mode());
+                        setNullableLong(ps, 9, wait == null ? null : wait.dueAt().toEpochMilli());
+                        ps.setLong(10, messageId);
                     });
             long destinationId = query("SELECT destination_id FROM message WHERE id = ?",
                     ps -> ps.setLong(1, messageId), rs -> rs.getLong(1)).get(0);
@@ -676,6 +701,120 @@ public final class QueueStore implements AutoCloseable {
                     result.outcome().name() + (reason.isEmpty() ? "" : ": " + reason));
             return null;
         });
+    }
+
+    /**
+     * Applies an application ACK received from a destination's receiver. It is matched by MSA-2 to the MSH-10 of
+     * a message of that destination that is waiting for one, or whose wait already ended without one (so a late
+     * ACK still corrects the result). AA completes the message; AE and AR move it to the dead-letter queue. The
+     * ACK is kept in the message's history.
+     *
+     * @param source the receiver's address, for the audit trail
+     * @return the updated message, or empty if no message matches (this is audited on the destination)
+     */
+    public synchronized Optional<QueuedMessage> applyApplicationAck(long destinationId, ParsedAck ack, String source) {
+        long now = clock.millis();
+        return tx(() -> {
+            Optional<QueuedMessage> match = query("SELECT " + MESSAGE_COLUMNS + " FROM message "
+                    + "WHERE destination_id = ? AND control_id = ? AND (status = ? "
+                    + "OR (status = ? AND last_outcome = ?) OR (status = ? AND last_outcome = ?)) "
+                    + "ORDER BY id DESC LIMIT 1", ps -> {
+                        ps.setLong(1, destinationId);
+                        ps.setString(2, ack.controlId());
+                        ps.setString(3, MessageStatus.AWAITING_APP_ACK.name());
+                        ps.setString(4, MessageStatus.DEAD_LETTER.name());
+                        ps.setString(5, APP_ACK_TIMEOUT);
+                        ps.setString(6, MessageStatus.ACKNOWLEDGED.name());
+                        ps.setString(7, APP_ACK_NOT_SENT);
+                    }, QueueStore::message).stream().findFirst();
+            if (match.isEmpty()) {
+                insertAudit(null, destinationId, null, null, ACTOR_ENGINE, "Application ACK " + ack.code()
+                        + " from " + source + " for control ID '" + ack.controlId() + "' matches no waiting message");
+                return Optional.empty();
+            }
+            QueuedMessage m = match.get();
+            MessageStatus to = ack.isAccept() ? MessageStatus.ACKNOWLEDGED : MessageStatus.DEAD_LETTER;
+            String outcome = SendOutcome.of(ack.code()).name();
+            String errors = ack.errors().stream().map(AckError::describe).collect(Collectors.joining("\n"));
+            String detail = ack.text().isEmpty() ? errors : ack.text();
+            List<Long> attempt = query("SELECT MAX(id) FROM attempt WHERE message_id = ?",
+                    ps -> ps.setLong(1, m.id()), rs -> rs.getLong(1));
+            execute("INSERT INTO ack (message_id, attempt_id, ack_code, msa_control_id, msa_text, errors, raw, "
+                    + "received_at, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'application')", ps -> {
+                        ps.setLong(1, m.id());
+                        ps.setLong(2, attempt.get(0));
+                        ps.setString(3, ack.code().name());
+                        ps.setString(4, ack.controlId());
+                        ps.setString(5, emptyToNull(ack.text()));
+                        ps.setString(6, emptyToNull(errors));
+                        ps.setString(7, ack.raw());
+                        ps.setLong(8, now);
+                    });
+            execute("UPDATE message SET status = ?, last_outcome = ?, last_error = ?, updated_at = ?, "
+                    + "completed_at = ?, app_ack_due_at = NULL WHERE id = ?", ps -> {
+                        ps.setString(1, to.name());
+                        ps.setString(2, outcome);
+                        ps.setString(3, ack.isAccept() ? null : emptyToNull(detail));
+                        ps.setLong(4, now);
+                        ps.setLong(5, now);
+                        ps.setLong(6, m.id());
+                    });
+            insertAudit(m.id(), destinationId, m.status(), to, ACTOR_ENGINE, "Application ACK " + ack.code() + " from "
+                    + source + (detail.isEmpty() ? "" : ": " + detail));
+            return message(m.id());
+        });
+    }
+
+    /**
+     * Ends the wait of messages whose application ACK is overdue. With MSH-16 ER the receiver only reports
+     * errors, so silence means success and the message is ACKNOWLEDGED; with AL or SU it is dead-lettered as
+     * {@link #APP_ACK_TIMEOUT}.
+     *
+     * @return the messages that changed
+     */
+    public synchronized List<QueuedMessage> expireApplicationAcks(long destinationId) {
+        long now = clock.millis();
+        return tx(() -> {
+            record Due(long id, String mode) {
+            }
+            List<Due> due = query("SELECT id, app_ack_mode FROM message WHERE destination_id = ? AND status = ? "
+                    + "AND app_ack_due_at <= ?", ps -> {
+                        ps.setLong(1, destinationId);
+                        ps.setString(2, MessageStatus.AWAITING_APP_ACK.name());
+                        ps.setLong(3, now);
+                    }, rs -> new Due(rs.getLong(1), rs.getString(2)));
+            List<QueuedMessage> changed = new ArrayList<>();
+            for (Due d : due) {
+                boolean errorsOnly = "ER".equals(d.mode());
+                MessageStatus to = errorsOnly ? MessageStatus.ACKNOWLEDGED : MessageStatus.DEAD_LETTER;
+                String detail = errorsOnly
+                        ? "No application ACK, and MSH-16 is ER (errors only), so the message is taken as accepted"
+                        : "No application ACK received in time (MSH-16 " + d.mode() + ")";
+                execute("UPDATE message SET status = ?, last_outcome = ?, last_error = ?, updated_at = ?, "
+                        + "completed_at = ?, app_ack_due_at = NULL WHERE id = ?", ps -> {
+                            ps.setString(1, to.name());
+                            ps.setString(2, errorsOnly ? APP_ACK_NOT_SENT : APP_ACK_TIMEOUT);
+                            ps.setString(3, errorsOnly ? null : detail);
+                            ps.setLong(4, now);
+                            ps.setLong(5, now);
+                            ps.setLong(6, d.id());
+                        });
+                insertAudit(d.id(), destinationId, MessageStatus.AWAITING_APP_ACK, to, ACTOR_ENGINE, detail);
+                message(d.id()).ifPresent(changed::add);
+            }
+            return changed;
+        });
+    }
+
+    /** When the earliest application ACK wait of a destination ends, if any message is waiting. */
+    public synchronized Optional<Instant> nextApplicationAckDue(long destinationId) {
+        return query("SELECT MIN(app_ack_due_at) FROM message WHERE destination_id = ? AND status = ?", ps -> {
+            ps.setLong(1, destinationId);
+            ps.setString(2, MessageStatus.AWAITING_APP_ACK.name());
+        }, rs -> {
+            long v = rs.getLong(1);
+            return rs.wasNull() ? null : Instant.ofEpochMilli(v);
+        }).stream().filter(java.util.Objects::nonNull).findFirst();
     }
 
     /**
@@ -739,17 +878,21 @@ public final class QueueStore implements AutoCloseable {
                         });
     }
 
-    /** Moves a waiting message to the dead-letter queue, for example to unblock the head of a FIFO queue. */
+    /**
+     * Moves a waiting message to the dead-letter queue, for example to unblock the head of a FIFO queue, or to
+     * stop waiting for an application ACK.
+     */
     public synchronized boolean moveToDeadLetter(long messageId, String actor, String reason) {
         long now = clock.millis();
         return tx(() -> {
             Optional<QueuedMessage> m = message(messageId);
             if (m.isEmpty() || (m.get().status() != MessageStatus.QUEUED
-                    && m.get().status() != MessageStatus.RETRY_PENDING)) {
+                    && m.get().status() != MessageStatus.RETRY_PENDING
+                    && m.get().status() != MessageStatus.AWAITING_APP_ACK)) {
                 return false;
             }
             execute("UPDATE message SET status = ?, updated_at = ?, completed_at = ?, last_outcome = 'MOVED_BY_USER', "
-                    + "last_error = ? WHERE id = ?", ps -> {
+                    + "last_error = ?, app_ack_due_at = NULL WHERE id = ?", ps -> {
                         ps.setString(1, MessageStatus.DEAD_LETTER.name());
                         ps.setLong(2, now);
                         ps.setLong(3, now);
@@ -1149,13 +1292,42 @@ public final class QueueStore implements AutoCloseable {
                 Instant.ofEpochMilli(rs.getLong(6)), optInstant(rs, 7));
     }
 
+    /** A message's attempts in order, each followed by the application ACK received for it, if any. */
     public synchronized List<AttemptRecord> attempts(long messageId) {
-        return query("SELECT a.id, a.message_id, a.attempt_no, a.started_at, a.finished_at, a.outcome, a.detail, "
-                + "a.round_trip_ms, k.ack_code, k.raw FROM attempt a LEFT JOIN ack k ON k.attempt_id = a.id "
+        List<AttemptRecord> out = new ArrayList<>(query("SELECT a.id, a.message_id, a.attempt_no, a.started_at, "
+                + "a.finished_at, a.outcome, a.detail, a.round_trip_ms, k.ack_code, k.raw FROM attempt a "
+                + "LEFT JOIN ack k ON k.attempt_id = a.id AND k.kind = 'response' "
                 + "WHERE a.message_id = ? ORDER BY a.attempt_no", ps -> ps.setLong(1, messageId),
                 rs -> new AttemptRecord(rs.getLong(1), rs.getLong(2), rs.getInt(3), Instant.ofEpochMilli(rs.getLong(4)),
                         optInstant(rs, 5), Optional.ofNullable(rs.getString(6)), Optional.ofNullable(rs.getString(7)),
-                        optLong(rs, 8), Optional.ofNullable(rs.getString(9)), Optional.ofNullable(rs.getString(10))));
+                        optLong(rs, 8), Optional.ofNullable(rs.getString(9)), Optional.ofNullable(rs.getString(10)))));
+        List<AttemptRecord> applicationAcks = query("SELECT k.id, k.message_id, a.attempt_no, k.received_at, "
+                + "k.ack_code, k.msa_text, k.errors, k.raw FROM ack k JOIN attempt a ON a.id = k.attempt_id "
+                + "WHERE k.message_id = ? AND k.kind = 'application' ORDER BY k.id", ps -> ps.setLong(1, messageId),
+                rs -> {
+                    String code = rs.getString(5);
+                    Instant at = Instant.ofEpochMilli(rs.getLong(4));
+                    String text = rs.getString(6);
+                    String errors = rs.getString(7);
+                    String detail = text != null ? text : errors != null ? errors : "";
+                    String outcome = io.hl7sender.core.ack.AckCode.parse(code).map(c -> SendOutcome.of(c).name())
+                            .orElse("APPLICATION_ACK");
+                    return new AttemptRecord(rs.getLong(1), rs.getLong(2), rs.getInt(3), at, Optional.of(at),
+                            Optional.of(outcome), Optional.of("Application ACK" + (detail.isEmpty() ? "" : ": "
+                            + detail)), Optional.empty(), Optional.ofNullable(code),
+                            Optional.ofNullable(rs.getString(8)), true);
+                });
+        for (AttemptRecord ack : applicationAcks) {
+            int at = out.size();
+            for (int i = 0; i < out.size(); i++) {
+                if (out.get(i).attemptNo() > ack.attemptNo()) {
+                    at = i;
+                    break;
+                }
+            }
+            out.add(at, ack);
+        }
+        return out;
     }
 
     public synchronized List<AuditEvent> audit(long messageId) {
@@ -1234,6 +1406,8 @@ public final class QueueStore implements AutoCloseable {
         ps.setString(28, d.script());
         ps.setString(29, d.transport());
         ps.setString(30, TransportOptionsJson.write(d.transportOptions()));
+        ps.setInt(31, d.appAckPort());
+        ps.setInt(32, d.appAckTimeoutMs());
     }
 
     private static DestinationConfig destination(ResultSet rs) throws SQLException {
@@ -1263,7 +1437,9 @@ public final class QueueStore implements AutoCloseable {
                 rs.getString("notes"),
                 rs.getString("script"),
                 rs.getString("transport"),
-                TransportOptionsJson.read(rs.getString("transport_options")));
+                TransportOptionsJson.read(rs.getString("transport_options")),
+                rs.getInt("app_ack_port"),
+                rs.getInt("app_ack_timeout_ms"));
     }
 
     private static ValidationLevel validationLevel(String name) {

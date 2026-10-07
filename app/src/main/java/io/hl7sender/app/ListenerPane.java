@@ -75,6 +75,11 @@ final class ListenerPane extends BorderPane {
     private final TextField delayField;
     private final CheckBox commitCodesBox = new CheckBox("Enhanced mode (CA/CE/CR)");
     private final TextField responseTextField = new TextField();
+    /** Enhanced mode: send an application ACK to this port of the sender after the CA; empty or 0 = off. */
+    private final TextField appAckPortField = Fields.integer("listenerAppAckPortField", 0, 5, 5);
+    private final ComboBox<io.hl7sender.core.ack.AckCode> appAckCodeBox = new ComboBox<>(
+            FXCollections.observableArrayList(io.hl7sender.core.ack.AckCode.AA, io.hl7sender.core.ack.AckCode.AE,
+                    io.hl7sender.core.ack.AckCode.AR));
     private final CheckBox tlsBox = new CheckBox("Use TLS");
     private final TextField keyStoreField = new TextField();
     private final PasswordField keyPasswordField = new PasswordField();
@@ -109,6 +114,8 @@ final class ListenerPane extends BorderPane {
         commitCodesBox.selectedProperty().addListener((o, a, b) -> applyLiveSettings());
         delayField.textProperty().addListener((o, a, b) -> applyLiveSettings());
         responseTextField.textProperty().addListener((o, a, b) -> applyLiveSettings());
+        appAckPortField.textProperty().addListener((o, a, b) -> applyLiveSettings());
+        appAckCodeBox.valueProperty().addListener((o, a, b) -> applyLiveSettings());
         saveFolderField.textProperty().addListener((o, a, b) -> applyLiveSettings());
     }
 
@@ -155,6 +162,15 @@ final class ListenerPane extends BorderPane {
         responseTextField.setId("listenerResponseTextField");
         responseTextField.setPromptText("optional MSA-3 text");
         responseTextField.setPrefColumnCount(16);
+        appAckPortField.setText("");
+        appAckPortField.setPromptText("off");
+        appAckPortField.setTooltip(new Tooltip("After a CA, send an application ACK one second later to this port on "
+                + "the sender (its destination's Application ACK port), as MSH-16 asks: AL always, ER only AE/AR, "
+                + "SU only AA"));
+        appAckCodeBox.setId("listenerAppAckCodeBox");
+        appAckCodeBox.setValue(io.hl7sender.core.ack.AckCode.AA);
+        appAckPortField.disableProperty().bind(commitCodesBox.selectedProperty().not());
+        appAckCodeBox.disableProperty().bind(commitCodesBox.selectedProperty().not());
         startButton.setId("listenerStartButton");
         startButton.setPrefWidth(90);
         startButton.setOnAction(e -> toggle());
@@ -173,8 +189,8 @@ final class ListenerPane extends BorderPane {
         });
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox actions = new HBox(12, commitCodesBox, Fields.label("MSA-3 text"), responseTextField, spacer,
-                clear, stateBadge, startButton);
+        HBox actions = new HBox(12, commitCodesBox, Fields.label("App ACK to port"), appAckPortField, appAckCodeBox,
+                Fields.label("MSA-3 text"), responseTextField, spacer, clear, stateBadge, startButton);
         actions.setAlignment(Pos.CENTER_LEFT);
         actions.setPadding(new Insets(0, 10, 10, 10));
         return new VBox(grid, actions, buildTlsForm(), buildRulesForm());
@@ -534,9 +550,13 @@ final class ListenerPane extends BorderPane {
         int delay = delayField.getText().isBlank() ? 0 : Fields.parse(delayField, "Delay", 0, 3_600_000);
         ResponseMode mode = modeBox.getValue() == null ? ResponseMode.ACCEPT : modeBox.getValue();
         String folder = saveFolderField.getText() == null ? "" : saveFolderField.getText().trim();
+        int appAckPort = appAckPortField.getText().isBlank() ? 0
+                : Fields.parse(appAckPortField, "Application ACK port", 0, 65_535);
+        ListenerSettings.AppAck appAck = !commitCodesBox.isSelected() || appAckPort == 0 ? null
+                : new ListenerSettings.AppAck(appAckPort, appAckCodeBox.getValue(), 1_000);
         return new ListenerSettings(mode, delay, commitCodesBox.isSelected(), responseTextField.getText(),
                 StandardCharsets.UTF_8, Mllp.DEFAULT_MAX_FRAME_BYTES, rules(),
-                folder.isEmpty() ? null : Path.of(folder));
+                folder.isEmpty() ? null : Path.of(folder), appAck);
     }
 
     /** Queues follow-up messages when this window delivers from the queue; otherwise explains why not. */

@@ -186,6 +186,14 @@ class QueueUiTest {
         assertThat(onCommitReject.getValue()).isEqualTo(onCommitReject.getItems().get(1));
         assertThat(onCommitError.getValue()).isEqualTo(onCommitError.getItems().get(0));
         robot.interact(() -> onCommitReject.setValue(onCommitReject.getItems().get(0)));
+        int appAckPort;
+        try (java.net.ServerSocket probe = new java.net.ServerSocket(0)) {
+            appAckPort = probe.getLocalPort();
+        }
+        robot.interact(() -> {
+            robot.lookup("#destAppAckPortField").queryAs(TextField.class).setText(String.valueOf(appAckPort));
+            robot.lookup("#destAppAckTimeoutField").queryAs(TextField.class).setText("120");
+        });
         robot.clickOn("#destOkButton");
         await(() -> engine().destinations().size() == 1);
         DestinationConfig saved = engine().destinations().get(0);
@@ -195,6 +203,9 @@ class QueueUiTest {
         assertThat(saved.ackPolicy().actionFor(SendOutcome.COMMIT_REJECT)).isEqualTo(AckPolicy.Action.RETRY);
         assertThat(saved.ackPolicy().actionFor(SendOutcome.COMMIT_ERROR)).isEqualTo(AckPolicy.Action.RETRY);
         assertThat(saved.ackPolicy().actionFor(SendOutcome.APPLICATION_ERROR)).isEqualTo(AckPolicy.Action.DEAD_LETTER);
+        assertThat(saved.appAckPort()).isEqualTo(appAckPort);
+        assertThat(saved.appAckTimeoutMs()).isEqualTo(120_000);
+        await(() -> engine().isListeningForAppAcks(saved.id()));
         assertThat(robot.lookup("#destinationList").queryAs(ListView.class).getItems().size()).isEqualTo(1);
     }
 

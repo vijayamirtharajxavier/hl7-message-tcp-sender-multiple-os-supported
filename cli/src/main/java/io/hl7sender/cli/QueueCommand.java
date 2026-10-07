@@ -44,7 +44,8 @@ import picocli.CommandLine.Spec;
 final class QueueCommand {
 
     static final Set<MessageStatus> PENDING =
-            EnumSet.of(MessageStatus.QUEUED, MessageStatus.IN_FLIGHT, MessageStatus.RETRY_PENDING);
+            EnumSet.of(MessageStatus.QUEUED, MessageStatus.IN_FLIGHT, MessageStatus.RETRY_PENDING,
+                    MessageStatus.AWAITING_APP_ACK);
 
     private QueueCommand() {
     }

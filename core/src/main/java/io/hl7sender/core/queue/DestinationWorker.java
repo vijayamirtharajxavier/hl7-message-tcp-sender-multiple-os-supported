@@ -75,6 +75,8 @@ final class DestinationWorker implements Runnable {
     private LocalDate lastCertificateWarning;
     /** Earliest time (System.nanoTime) the next attempt may start under the rate limit. */
     private long nextSendNanos;
+    /** Longest wait allowed this loop, so an application ACK wait ends on time; Long.MAX_VALUE if none. */
+    private volatile long appAckWaitCapMs = Long.MAX_VALUE;
 
     DestinationWorker(DestinationConfig initial, QueueStore store, Hl7Sender sender, Clock clock,
                       RandomGenerator random, Consumer<DestinationState> stateListener, Runnable queueChanged,
@@ -154,6 +156,7 @@ final class DestinationWorker implements Runnable {
         }
         DestinationConfig config = maybeConfig.get();
         applyConfig(config);
+        expireApplicationAcks(config);
 
         if (config.paused()) {
             closeConnection();
@@ -239,6 +242,7 @@ final class DestinationWorker implements Runnable {
 
         SendOutcome outcome = result.outcome();
         AckPolicy.Action action = config.ackPolicy().actionFor(outcome);
+        QueueStore.AppAckWait appAckWait = null;
         boolean receiverResponded = outcome.connectionReusable();
         boolean possibleDuplicate = MAY_HAVE_BEEN_PROCESSED.contains(outcome);
         Instant now = clock.instant();
@@ -250,6 +254,13 @@ final class DestinationWorker implements Runnable {
             case COMPLETE -> {
                 next = outcome == SendOutcome.SENT_NO_ACK ? MessageStatus.SENT_UNCONFIRMED : MessageStatus.ACKNOWLEDGED;
                 reason = "";
+                String appAckMode = applicationAckMode(config, message, result);
+                if (appAckMode != null) {
+                    next = MessageStatus.AWAITING_APP_ACK;
+                    appAckWait = new QueueStore.AppAckWait(appAckMode, now.plusMillis(config.appAckTimeoutMs()));
+                    reason = "committed (CA); waiting up to " + formatDelay(Duration.ofMillis(
+                            config.appAckTimeoutMs())) + " for the application ACK (MSH-16 " + appAckMode + ")";
+                }
             }
             case DEAD_LETTER -> {
                 next = MessageStatus.DEAD_LETTER;
@@ -278,12 +289,50 @@ final class DestinationWorker implements Runnable {
             store.auditDestination(destinationId, QueueStore.ACTOR_ENGINE, detail);
         }
 
-        store.completeAttempt(message.id(), attemptId, result, next, nextAttemptAt, possibleDuplicate, reason);
+        store.completeAttempt(message.id(), attemptId, result, next, nextAttemptAt, possibleDuplicate, reason,
+                appAckWait);
         if (next == MessageStatus.DEAD_LETTER) {
             LOG.warn("Destination '{}': message [{}] dead-lettered after {}: {}", config.name(), message.controlId(),
                     outcome, reason);
         }
         queueChanged.run();
+    }
+
+    /**
+     * MSH-16 of a message the receiver committed with CA, if it asks for an application ACK (AL, ER or SU) and
+     * the destination listens for them; otherwise null, and the CA completes the message.
+     */
+    static String applicationAckMode(DestinationConfig config, QueuedMessage message, SendResult result) {
+        if (!config.matchesAppAcks() || result.ack().map(a -> a.code() != io.hl7sender.core.ack.AckCode.CA)
+                .orElse(true)) {
+            return null;
+        }
+        try {
+            String mode = io.hl7sender.core.hl7.ParsedMessage.parse(message.payload()).header().applicationAckType()
+                    .trim().toUpperCase(java.util.Locale.ROOT);
+            return switch (mode) {
+                case "AL", "ER", "SU" -> mode;
+                default -> null;
+            };
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** Ends overdue application ACK waits and sets how long this loop may wait before the next one is due. */
+    private void expireApplicationAcks(DestinationConfig config) {
+        List<QueuedMessage> expired = store.expireApplicationAcks(destinationId);
+        for (QueuedMessage m : expired) {
+            if (m.status() == MessageStatus.DEAD_LETTER) {
+                LOG.warn("Destination '{}': message [{}] dead-lettered: {}", config.name(), m.controlId(),
+                        m.lastError().orElse(QueueStore.APP_ACK_TIMEOUT));
+            }
+        }
+        if (!expired.isEmpty()) {
+            queueChanged.run();
+        }
+        appAckWaitCapMs = store.nextApplicationAckDue(destinationId)
+                .map(due -> Math.max(1, due.toEpochMilli() - clock.millis())).orElse(Long.MAX_VALUE);
     }
 
     /** Sends with the destination's transport, opening it first if needed. Never throws. */
@@ -415,7 +464,8 @@ final class DestinationWorker implements Runnable {
         }
     }
 
-    private void await(long millis) {
+    private void await(long requestedMillis) {
+        long millis = Math.min(requestedMillis, appAckWaitCapMs);
         if (millis <= 0) {
             return;
         }

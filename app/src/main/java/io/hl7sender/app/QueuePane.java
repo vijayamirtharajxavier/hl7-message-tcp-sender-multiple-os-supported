@@ -76,8 +76,8 @@ final class QueuePane extends BorderPane {
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final Set<MessageStatus> PENDING =
-            EnumSet.of(MessageStatus.QUEUED, MessageStatus.IN_FLIGHT, MessageStatus.RETRY_PENDING);
+    private static final Set<MessageStatus> PENDING = EnumSet.of(MessageStatus.QUEUED, MessageStatus.IN_FLIGHT,
+            MessageStatus.RETRY_PENDING, MessageStatus.AWAITING_APP_ACK);
     private static final Set<MessageStatus> DELIVERED =
             EnumSet.of(MessageStatus.ACKNOWLEDGED, MessageStatus.SENT_UNCONFIRMED);
     private static final Set<MessageStatus> DEAD = EnumSet.of(MessageStatus.DEAD_LETTER);

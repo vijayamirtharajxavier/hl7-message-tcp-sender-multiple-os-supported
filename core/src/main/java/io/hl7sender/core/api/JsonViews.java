@@ -120,6 +120,7 @@ public final class JsonViews {
         m.put("detail", a.detail().orElse(null));
         m.put("roundTripMs", a.roundTripMs().orElse(null));
         m.put("ackCode", a.ackCode().orElse(null));
+        m.put("applicationAck", a.applicationAck());
         return m;
     }
 

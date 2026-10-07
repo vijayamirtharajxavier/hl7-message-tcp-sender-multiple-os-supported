@@ -27,11 +27,12 @@ final class Migrations {
     /** Scripts in version order; index + 1 is the schema version the script produces. */
     static final List<String> SCRIPTS = List.of("V1__queue.sql", "V2__bulk_and_validation.sql",
             "V3__tls_and_notes.sql", "V4__metrics.sql", "V5__schedules.sql", "V6__scripts.sql", "V7__transports.sql",
-            "V8__users.sql");
+            "V8__users.sql", "V9__application_acks.sql");
 
     /** PostgreSQL scripts by the version they produce; the first is the baseline for an empty database. */
     static final java.util.SortedMap<Integer, String> POSTGRES = new java.util.TreeMap<>(java.util.Map.of(
-            8, "postgres/V8__baseline.sql"));
+            8, "postgres/V8__baseline.sql",
+            9, "postgres/V9__application_acks.sql"));
 
     private Migrations() {
     }

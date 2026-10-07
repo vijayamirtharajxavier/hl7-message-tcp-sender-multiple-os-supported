@@ -30,6 +30,9 @@ Java runtime, so nothing else needs to be installed.
 
 **Acknowledgments**
 - Original (`AA`/`AE`/`AR`) and enhanced (`CA`/`CE`/`CR`) codes.
+- **Application ACKs** in enhanced mode: after a `CA`, a message whose MSH-16 is AL, ER or SU waits as
+  `AWAITING_APP_ACK` until the receiver's later AA/AE/AR arrives on the destination's application ACK port, matched
+  by MSA-2. AE/AR, or no application ACK in time, sends it to the dead-letter queue; with ER, silence means success.
 - The ACK is matched to the message by **MSA-2 = MSH-10**. A mismatch is reported, not treated as success.
 - **ERR segments** are decoded in both the v2.5+ layout and the older layout.
 - Every outcome is classified and colour-coded:
@@ -229,6 +232,7 @@ cat message.hl7 | hl7send send -H localhost -p 2575 - # read from standard input
 hl7send validate message.hl7 --json
 hl7send listen -p 2575 --mode accept                  # mock receiver (Ctrl+C to stop)
 hl7send listen -p 2575 --rules rules.json --save-dir in/  # responder: per-rule ACKs and follow-up messages
+hl7send listen -p 2575 --commit-codes --app-ack-port 6700  # enhanced mode: CA, then an application ACK
 
 # The durable queue
 hl7send queue send -d "Mirth" batch.hl7               # one message, many, an FHS/BHS batch or an MLLP capture

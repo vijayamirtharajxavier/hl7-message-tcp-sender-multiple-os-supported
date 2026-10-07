@@ -218,7 +218,7 @@ public final class TestListener implements Closeable {
             OutputStream out = new BufferedOutputStream(client.getOutputStream());
             byte[] frame;
             while ((frame = reader.readFrame()) != null) {
-                if (!handle(frame, active, remote, out)) {
+                if (!handle(frame, active, remote, client.getInetAddress(), out)) {
                     break;
                 }
             }
@@ -234,7 +234,7 @@ public final class TestListener implements Closeable {
     }
 
     /** Handles one frame. Returns false if the connection should be closed. */
-    private boolean handle(byte[] frame, Active a, String remote, OutputStream out)
+    private boolean handle(byte[] frame, Active a, String remote, InetAddress remoteAddress, OutputStream out)
             throws IOException, InterruptedException {
         ListenerSettings s = a.settings();
         Instant receivedAt = Instant.now();
@@ -307,7 +307,55 @@ public final class TestListener implements Closeable {
         if (rule != null && rule.followUp() != null) {
             scheduleFollowUp(rule, parsed);
         }
+        if (s.appAck() != null && "CA".equals(code) && parsed != null) {
+            scheduleApplicationAck(s, parsed, remoteAddress);
+        }
         return keepOpen;
+    }
+
+    /**
+     * True if a receiver in enhanced mode sends {@code code} as the application ACK for a message with MSH-16
+     * {@code applicationAckType}: AL always, ER only errors, SU only success, NE or empty never.
+     */
+    static boolean sendsApplicationAck(String applicationAckType, AckCode code) {
+        return switch (applicationAckType.trim().toUpperCase(java.util.Locale.ROOT)) {
+            case "AL" -> true;
+            case "ER" -> code != AckCode.AA;
+            case "SU" -> code == AckCode.AA;
+            default -> false;
+        };
+    }
+
+    /** Sends the application ACK for {@code original} to the sender's application ACK port, after the delay. */
+    private void scheduleApplicationAck(ListenerSettings s, ParsedMessage original, InetAddress sender) {
+        ListenerSettings.AppAck appAck = s.appAck();
+        if (!sendsApplicationAck(original.header().applicationAckType(), appAck.code())) {
+            return;
+        }
+        String ack = ackBuilder.build(original, appAck.code(), s.responseText(), null);
+        Thread.ofVirtual().name("app-ack-" + original.header().controlId()).start(() -> {
+            try {
+                if (appAck.delayMs() > 0) {
+                    Thread.sleep(appAck.delayMs());
+                }
+                try (Socket socket = new Socket()) {
+                    socket.connect(new InetSocketAddress(sender, appAck.port()), 10_000);
+                    socket.setSoTimeout(10_000);
+                    OutputStream out = socket.getOutputStream();
+                    out.write(Mllp.frame(ack, s.charset()));
+                    out.flush();
+                    byte[] reply = new MllpFrameReader(socket.getInputStream(), s.maxFrameBytes()).readFrame();
+                    LOG.info("Sent application ACK {} for [{}] to {}:{}{}", appAck.code(),
+                            original.header().controlId(), sender.getHostAddress(), appAck.port(),
+                            reply == null ? "" : " -> " + customCode(new String(reply, s.charset())));
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (IOException e) {
+                LOG.warn("Sending the application ACK for [{}] to {}:{} failed: {}", original.header().controlId(),
+                        sender.getHostAddress(), appAck.port(), e.getMessage());
+            }
+        });
     }
 
     private void scheduleFollowUp(ResponseRule rule, ParsedMessage inbound) {

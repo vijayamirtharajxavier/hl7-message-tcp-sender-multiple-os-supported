@@ -59,6 +59,9 @@ public final class QueueExport {
                 at.put("outcome", a.outcome().orElse(null));
                 at.put("ackCode", a.ackCode().orElse(null));
                 at.put("detail", a.detail().orElse(null));
+                if (a.applicationAck()) {
+                    at.put("applicationAck", true);
+                }
             }
             // Segments one per array entry for readability; join with CR to rebuild the wire format.
             ArrayNode segments = item.putArray("segments");

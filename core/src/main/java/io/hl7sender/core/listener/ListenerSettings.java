@@ -18,6 +18,7 @@ import java.util.Objects;
  * @param maxFrameBytes largest inbound frame that is accepted
  * @param rules         responder rules, checked in order before the default response; the first match wins
  * @param saveFolder    folder to save every received message to, one file each, or {@code null}
+ * @param appAck        in enhanced mode, also send an application ACK back to the sender later, or {@code null}
  */
 public record ListenerSettings(
         ResponseMode mode,
@@ -27,7 +28,32 @@ public record ListenerSettings(
         Charset charset,
         int maxFrameBytes,
         List<ResponseRule> rules,
-        Path saveFolder) {
+        Path saveFolder,
+        AppAck appAck) {
+
+    /**
+     * After answering a message with CA, send an application ACK as a new connection to the sender's address on
+     * {@code port}, as a receiver in enhanced mode does when the message's MSH-16 asks for one: always for AL,
+     * only an AE or AR for ER, and only an AA for SU.
+     *
+     * @param port    the sender's application ACK port
+     * @param code    AA, AE or AR
+     * @param delayMs wait this long after the commit ACK
+     */
+    public record AppAck(int port, io.hl7sender.core.ack.AckCode code, int delayMs) {
+        public AppAck {
+            Objects.requireNonNull(code, "code");
+            if (port < 1 || port > 65_535) {
+                throw new IllegalArgumentException("Application ACK port must be between 1 and 65535");
+            }
+            if (code.isCommit()) {
+                throw new IllegalArgumentException("An application ACK is AA, AE or AR");
+            }
+            if (delayMs < 0) {
+                throw new IllegalArgumentException("delayMs cannot be negative");
+            }
+        }
+    }
 
     public static final ListenerSettings DEFAULTS = new ListenerSettings(
             ResponseMode.ACCEPT, 0, false, "", StandardCharsets.UTF_8, Mllp.DEFAULT_MAX_FRAME_BYTES);
@@ -51,27 +77,39 @@ public record ListenerSettings(
         this(mode, delayMs, commitCodes, responseText, charset, maxFrameBytes, List.of(), null);
     }
 
+    /** Settings without application ACKs. */
+    public ListenerSettings(ResponseMode mode, int delayMs, boolean commitCodes, String responseText, Charset charset,
+                            int maxFrameBytes, List<ResponseRule> rules, Path saveFolder) {
+        this(mode, delayMs, commitCodes, responseText, charset, maxFrameBytes, rules, saveFolder, null);
+    }
+
+    public ListenerSettings withAppAck(AppAck newAppAck) {
+        return new ListenerSettings(mode, delayMs, commitCodes, responseText, charset, maxFrameBytes, rules,
+                saveFolder, newAppAck);
+    }
+
     public ListenerSettings withMode(ResponseMode newMode) {
         return new ListenerSettings(newMode, delayMs, commitCodes, responseText, charset, maxFrameBytes, rules,
-                saveFolder);
+                saveFolder, appAck);
     }
 
     public ListenerSettings withCommitCodes(boolean newCommitCodes) {
         return new ListenerSettings(mode, delayMs, newCommitCodes, responseText, charset, maxFrameBytes, rules,
-                saveFolder);
+                saveFolder, appAck);
     }
 
     public ListenerSettings withDelayMs(int newDelayMs) {
         return new ListenerSettings(mode, newDelayMs, commitCodes, responseText, charset, maxFrameBytes, rules,
-                saveFolder);
+                saveFolder, appAck);
     }
 
     public ListenerSettings withRules(List<ResponseRule> newRules) {
         return new ListenerSettings(mode, delayMs, commitCodes, responseText, charset, maxFrameBytes, newRules,
-                saveFolder);
+                saveFolder, appAck);
     }
 
     public ListenerSettings withSaveFolder(Path folder) {
-        return new ListenerSettings(mode, delayMs, commitCodes, responseText, charset, maxFrameBytes, rules, folder);
+        return new ListenerSettings(mode, delayMs, commitCodes, responseText, charset, maxFrameBytes, rules, folder,
+                appAck);
     }
 }
