@@ -207,7 +207,9 @@ A destination normally sends over MLLP. On the destination editor's **Transport*
 - **FHIR R4**: convert each message to a FHIR transaction Bundle and POST it to a FHIR server's base URL.
 - A **plugin** from the plugins folder, such as SFTP or a message broker (see the administrator guide).
 
-Queuing, retries, the dead-letter queue, scripts and history work the same for every transport.
+Queuing, retries, the dead-letter queue, scripts and history work the same for every transport. For which
+destination settings each transport uses, and what each one means for it, see
+[Destination settings by transport](destination-settings.md).
 
 ## FHIR R4 preview
 

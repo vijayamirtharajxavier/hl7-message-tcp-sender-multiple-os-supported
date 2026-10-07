@@ -187,6 +187,8 @@ check is off until you turn it on, and nothing is downloaded automatically.
 ## Documentation
 
 - [User guide](docs/user-guide.md): installing, sending, destinations and the queue, TLS, monitoring.
+- [Destination settings by transport](docs/destination-settings.md): which settings MLLP, HTTP(S), folder and FHIR R4
+  destinations use, and what each one means.
 - [Administrator guide](docs/admin-guide.md): silent installs, data locations, PHI, services, backup, updates.
 - [Troubleshooting](docs/troubleshooting.md): ACK outcomes, common AE/AR causes, TLS handshake failures.
 - [Contributing](CONTRIBUTING.md): building, packaging and releasing.
