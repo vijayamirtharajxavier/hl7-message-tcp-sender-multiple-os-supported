@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 import java.util.function.Consumer;
 import javafx.application.HostServices;
 import javafx.application.Platform;
@@ -235,7 +237,23 @@ final class MainWindow extends BorderPane {
         }));
     }
 
+    /**
+     * Saves settings and stops the panes' background work. Runs on the JavaFX thread, waiting for it if called from
+     * another thread, so a pane update already queued there finishes before the caller closes the database.
+     */
     void shutdown() {
+        if (!Platform.isFxApplicationThread()) {
+            FutureTask<Void> task = new FutureTask<>(this::shutdown, null);
+            Platform.runLater(task);
+            try {
+                task.get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException e) {
+                throw new IllegalStateException("Shutdown failed", e.getCause());
+            }
+            return;
+        }
         senderPane.saveSettings();
         senderPane.shutdown();
         queuePane.shutdown();
