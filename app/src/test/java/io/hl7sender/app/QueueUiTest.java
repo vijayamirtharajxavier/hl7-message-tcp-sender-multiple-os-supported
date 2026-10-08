@@ -138,6 +138,45 @@ class QueueUiTest {
     }
 
     @Test
+    void permanentCommitErrorsAreAllInTheHistory(FxRobot robot) throws Exception {
+        // A receiver in enhanced mode that answers CE for a content error that never clears.
+        listener = new TestListener("127.0.0.1", 0, new ListenerSettings(ResponseMode.ERROR, 0, true,
+                "OBX-5 is not a number", java.nio.charset.StandardCharsets.UTF_8,
+                io.hl7sender.core.mllp.Mllp.DEFAULT_MAX_FRAME_BYTES), m -> { });
+        listener.start();
+        DestinationConfig d = engine().saveDestination(DestinationConfig.of("Lab (enhanced mode)", "127.0.0.1",
+                listener.port()).withRetry(new RetryPolicy(4, 50, 100, 0)));
+        String oru = SampleMessages.all().stream().filter(s -> s.text().contains("ORU^R01")).findFirst()
+                .orElseThrow().text();
+        engine().enqueue(d.id(), oru, SendOptions.DEFAULTS);
+        await(() -> count(d.id(), MessageStatus.DEAD_LETTER) == 1);
+
+        selectTab(robot, "#mainTabs", "queueTab");
+        ListView<?> destinations = robot.lookup("#destinationList").queryAs(ListView.class);
+        await(() -> destinations.getSelectionModel().getSelectedItem() != null);
+        selectTab(robot, "#queueViews", "Dead letter");
+        TableView<Object> dead = table(robot, "#deadLetterTable");
+        await(() -> dead.getItems().size() == 1);
+        robot.interact(() -> {
+            dead.getSelectionModel().selectFirst();
+            // The Queue tab's message detail is the tab pane that holds #attemptsTable (History has its own).
+            javafx.scene.Node n = robot.lookup("#attemptsTable").query();
+            while (!(n instanceof TabPane)) {
+                n = n.getParent();
+            }
+            TabPane detail = (TabPane) n;
+            detail.getSelectionModel().select(detail.getTabs().stream()
+                    .filter(x -> "Attempts and ACKs".equals(x.getText())).findFirst().orElseThrow());
+        });
+        WaitForAsyncUtils.waitForFxEvents();
+        TableView<Object> attempts = table(robot, "#attemptsTable");
+        assertThat(attempts.getItems()).hasSize(4);
+        assertThat(robot.lookup("#attemptAckText").queryAs(TextArea.class).getText()).contains("MSA|CE|")
+                .contains("OBX-5 is not a number");
+        MainWindowUiTest.screenshot(robot, window, "43-commit-error-history");
+    }
+
+    @Test
     void deadLetterCanBeRequeuedFromTheQueueTab(FxRobot robot) throws Exception {
         DestinationConfig d = destination(ResponseMode.ERROR);
         engine().enqueue(d.id(), SampleMessages.all().get(0).text(), SendOptions.DEFAULTS);
