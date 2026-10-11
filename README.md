@@ -9,7 +9,7 @@ TCP/MLLP to EHRs, Mirth Connect and Apache NiFi. It checks acknowledgments (ACK/
 message is lost, and includes a test listener that can play the receiving system. The installers bundle their own
 Java runtime, so nothing else needs to be installed.
 
-[![HL7 Sender Road Map: a message comes in, is prepared, saved to the durable queue, delivered by the destination's worker to the receiver, and its ACK, matched by MSA-2, decides whether it is acknowledged, retried, dead-lettered or waits for an application ACK](docs/images/hl7-sender-road-map.gif)](docs/user-guide.md#how-a-message-travels)
+[![HL7 Sender Roadmap: a message comes in, is prepared, saved to the durable queue, delivered by the destination's worker to the receiver, and its ACK, matched by MSA-2, decides whether it is acknowledged, retried, dead-lettered or waits for an application ACK](docs/images/hl7-sender-road-map.gif)](docs/user-guide.md#how-a-message-travels)
 
 ![Sending an ADT^A01 and reading the ACK](docs/images/sender-ack.png)
 
@@ -189,7 +189,7 @@ check is off until you turn it on, and nothing is downloaded automatically.
 ## Documentation
 
 - [User guide](docs/user-guide.md): installing, sending, destinations and the queue, TLS, monitoring. It starts
-  with the [road map of how a message travels](docs/user-guide.md#how-a-message-travels).
+  with the [roadmap of how a message travels](docs/user-guide.md#how-a-message-travels).
 - [Destination settings by transport](docs/destination-settings.md): which settings MLLP, HTTP(S), folder and FHIR R4
   destinations use, and what each one means.
 - [Administrator guide](docs/admin-guide.md): silent installs, data locations, PHI, services, backup, updates.

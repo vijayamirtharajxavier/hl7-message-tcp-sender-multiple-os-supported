@@ -6,7 +6,7 @@ delivered. This guide covers the desktop app; the [README](../README.md#command-
 
 ## How a message travels
 
-![HL7 Sender Road Map: a message comes in, is prepared, saved to the durable queue, delivered by the destination's worker to the receiver, and its ACK, matched by MSA-2, decides whether it is acknowledged, retried, dead-lettered or waits for an application ACK](images/hl7-sender-road-map.gif)
+![HL7 Sender Roadmap: a message comes in, is prepared, saved to the durable queue, delivered by the destination's worker to the receiver, and its ACK, matched by MSA-2, decides whether it is acknowledged, retried, dead-lettered or waits for an application ACK](images/hl7-sender-road-map.gif)
 
 1. **Messages in**: the Sender tab, file and batch import, a watch folder, schedules, `hl7send` and the REST API,
    or responder follow-ups.
