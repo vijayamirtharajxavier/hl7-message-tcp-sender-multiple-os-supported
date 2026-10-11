@@ -9,6 +9,8 @@ TCP/MLLP to EHRs, Mirth Connect and Apache NiFi. It checks acknowledgments (ACK/
 message is lost, and includes a test listener that can play the receiving system. The installers bundle their own
 Java runtime, so nothing else needs to be installed.
 
+[![HL7 Sender Road Map: a message comes in, is prepared, saved to the durable queue, delivered by the destination's worker to the receiver, and its ACK, matched by MSA-2, decides whether it is acknowledged, retried, dead-lettered or waits for an application ACK](docs/images/hl7-sender-road-map.gif)](docs/user-guide.md#how-a-message-travels)
+
 ![Sending an ADT^A01 and reading the ACK](docs/images/sender-ack.png)
 
 | Durable queue with retries and audit trail | Test listener with responder rules | Dark theme |
