@@ -193,6 +193,8 @@ check is off until you turn it on, and nothing is downloaded automatically.
 - [Administrator guide](docs/admin-guide.md): silent installs, data locations, PHI, services, backup, updates.
 - [Troubleshooting](docs/troubleshooting.md): ACK outcomes, common AE/AR causes, TLS handshake failures.
 - [Contributing](CONTRIBUTING.md): building, packaging and releasing.
+- Background: [What a test HL7 v2 sender has to get right](https://dev.to/vijayamirtharajxavier/what-a-test-hl7-v2-sender-has-to-get-right-36fh)
+  (dev.to), on ACK deadlines, MSA-2 matching, CE vs CR, application ACKs and crash safety.
 
 ## Quick start (from source)
 
