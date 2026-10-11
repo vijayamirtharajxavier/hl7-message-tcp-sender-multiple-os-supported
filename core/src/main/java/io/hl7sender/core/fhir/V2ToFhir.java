@@ -32,6 +32,11 @@ import java.util.UUID;
  *   <li>OBR with its OBX segments to DiagnosticReport and Observations (ORU); ORC/OBR to ServiceRequest (ORM, OML)</li>
  * </ul>
  *
+ * <p>References follow "reference by identity": a reference to a Patient or Encounter created in the bundle also
+ * carries its identifier (the first PID-3, or the PV1-19 visit number with type {@code VN}), so a receiver can match
+ * it to a record it already has. Values that only identify something, such as a practitioner's ID number and name,
+ * become an identifier reference instead of a resource.
+ *
  * <p>Segments it does not map, and values it cannot map (such as a PV1-2 patient class with no
  * {@code Encounter.class} equivalent, which becomes the null flavor {@code UNK}), are listed in
  * {@link Result#notes()}. Resource IDs are derived from the message control ID, so converting the same message
@@ -81,6 +86,8 @@ public final class V2ToFhir {
     private final List<String> notes = new ArrayList<>();
     private final String seed;
     private String patientRef;
+    /** The patient's first PID-3 identifier, carried in every reference to the patient. */
+    private ObjectNode patientIdentifier;
     /** How resources refer to the visit: a reference to the Encounter in the bundle, or a logical reference. */
     private ObjectNode encounterReference;
 
@@ -152,6 +159,7 @@ public final class V2ToFhir {
             if (firstValue == null) {
                 firstSystem = system;
                 firstValue = value;
+                patientIdentifier = id.deepCopy();
             }
         }
         if (!ids.isEmpty()) {
@@ -198,12 +206,13 @@ public final class V2ToFhir {
 
     private void encounter(Segment pv1) {
         String visit = comp(pv1.field(19), 1);
-        if (!visit.isEmpty() && !message.header().messageCode().equalsIgnoreCase("ADT") && onlyVisitNumber(pv1)) {
+        ObjectNode visitId = visit.isEmpty() ? null : identifier(visit, comp(pv1.field(19), 4), "VN", "Visit number");
+        if (visitId != null && !message.header().messageCode().equalsIgnoreCase("ADT") && onlyVisitNumber(pv1)) {
             // Outside ADT the visit is usually managed elsewhere. Creating an Encounter would mean inventing a
             // class (and status) the sender never stated, so refer to the existing one by its visit number.
             encounterReference = NODES.objectNode();
             encounterReference.put("type", "Encounter");
-            encounterReference.putObject("identifier").put("value", visit);
+            encounterReference.set("identifier", visitId);
             notes.add("PV1 has only a visit number (PV1-19): resources refer to Encounter " + visit
                     + " by identifier instead of creating one");
             return;
@@ -236,17 +245,17 @@ public final class V2ToFhir {
         }
         e.set("class", coding);
         subject(e, "subject");
-        if (!visit.isEmpty()) {
-            e.putArray("identifier").addObject().put("value", visit);
+        if (visitId != null) {
+            e.putArray("identifier").add(visitId.deepCopy());
         }
         String location = String.join(" ", nonEmpty(comp(pv1.field(3), 1), comp(pv1.field(3), 2),
                 comp(pv1.field(3), 3)));
         if (!location.isEmpty()) {
             e.putArray("location").addObject().putObject("location").put("display", location);
         }
-        String attending = practitionerName(pv1.field(7));
-        if (!attending.isEmpty()) {
-            e.putArray("participant").addObject().putObject("individual").put("display", attending);
+        ObjectNode attending = practitioner(pv1.field(7));
+        if (attending != null) {
+            e.putArray("participant").addObject().set("individual", attending);
         }
         String start = dateTime(pv1.field(44));
         String end = dateTime(pv1.field(45));
@@ -261,6 +270,9 @@ public final class V2ToFhir {
         }
         encounterReference = NODES.objectNode();
         encounterReference.put("reference", add(e, null));
+        if (visitId != null) {
+            encounterReference.set("identifier", visitId.deepCopy());
+        }
     }
 
     /** True if PV1 carries nothing this converter maps except the visit number. */
@@ -282,9 +294,7 @@ public final class V2ToFhir {
 
     private void relatedPerson(Segment nk1) {
         ObjectNode r = resource("RelatedPerson");
-        if (patientRef != null) {
-            r.putObject("patient").put("reference", patientRef);
-        }
+        subject(r, "patient");
         ObjectNode name = humanName(nk1.field(2));
         if (name != null) {
             r.putArray("name").add(name);
@@ -410,9 +420,9 @@ public final class V2ToFhir {
         if (!requested.isEmpty()) {
             r.put("occurrenceDateTime", requested);
         }
-        String requester = practitionerName(orc != null && !orc.field(12).isEmpty() ? orc.field(12) : obr.field(16));
-        if (!requester.isEmpty()) {
-            r.putObject("requester").put("display", requester);
+        ObjectNode requester = practitioner(orc != null && !orc.field(12).isEmpty() ? orc.field(12) : obr.field(16));
+        if (requester != null) {
+            r.set("requester", requester);
         }
         add(r, null);
     }
@@ -525,10 +535,26 @@ public final class V2ToFhir {
         return url;
     }
 
+    /** Sets {@code field} on {@code r} to the patient: its reference in the bundle and its identifier. */
     private void subject(ObjectNode r, String field) {
         if (patientRef != null) {
-            r.putObject(field).put("reference", patientRef);
+            ObjectNode ref = r.putObject(field);
+            ref.put("reference", patientRef);
+            if (patientIdentifier != null) {
+                ref.set("identifier", patientIdentifier.deepCopy());
+            }
         }
+    }
+
+    /** An Identifier with {@code value}, a system from the assigning authority if there is one, and a v2-0203 type. */
+    private static ObjectNode identifier(String value, String authority, String typeCode, String typeDisplay) {
+        ObjectNode id = NODES.objectNode();
+        if (!authority.isEmpty()) {
+            id.put("system", identifierSystem(authority));
+        }
+        id.put("value", value);
+        id.set("type", concept("http://terminology.hl7.org/CodeSystem/v2-0203", typeCode, typeDisplay));
+        return id;
     }
 
     private List<String> reps(String field) {
@@ -673,11 +699,23 @@ public final class V2ToFhir {
         return c;
     }
 
-    private String practitionerName(String xcn) {
-        String family = text(comp(xcn, 2));
-        String given = text(comp(xcn, 3));
-        String prefix = text(comp(xcn, 6));
-        return String.join(" ", nonEmpty(prefix, given, family));
+    /**
+     * An XCN as a logical reference to a Practitioner: the ID number (XCN-1) as its identifier and the name as its
+     * display. A v2 message has no more about the person, so no Practitioner resource is created. Null if empty.
+     */
+    private ObjectNode practitioner(String xcn) {
+        String id = comp(xcn, 1);
+        String name = String.join(" ", nonEmpty(text(comp(xcn, 6)), text(comp(xcn, 3)), text(comp(xcn, 2))));
+        if (id.isEmpty() && name.isEmpty()) {
+            return null;
+        }
+        ObjectNode ref = NODES.objectNode();
+        if (!id.isEmpty()) {
+            ref.put("type", "Practitioner");
+            ref.set("identifier", identifier(id, comp(xcn, 9), "PRN", "Provider number"));
+        }
+        putIfPresent(ref, "display", name);
+        return ref;
     }
 
     private static String identifierSystem(String authority) {

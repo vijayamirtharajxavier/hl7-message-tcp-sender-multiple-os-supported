@@ -157,6 +157,71 @@ class V2ToFhirTest {
     }
 
     @Test
+    void referencesCarryTheIdentifierAsWellAsTheBundleReference() {
+        V2ToFhir.Result r = V2ToFhir.convert(sample("ADT^A01"));
+        String patientRef = r.bundle().path("entry").get(0).path("fullUrl").asText();
+        JsonNode encounter = resources(r, "Encounter").get(0);
+        String encounterRef = r.bundle().path("entry").get(1).path("fullUrl").asText();
+
+        // Every reference to the patient: the resource in the bundle, and the first PID-3 identifier.
+        for (JsonNode subject : List.of(encounter.path("subject"), resources(r, "AllergyIntolerance").get(0)
+                .path("patient"), resources(r, "RelatedPerson").get(0).path("patient"))) {
+            assertThat(subject.path("reference").asText()).isEqualTo(patientRef);
+            assertThat(subject.path("identifier").path("system").asText()).isEqualTo("urn:hl7v2:DEMO_HOSP");
+            assertThat(subject.path("identifier").path("value").asText()).isEqualTo("MRN100001");
+            assertThat(subject.path("identifier").path("type").path("coding").get(0).path("code").asText())
+                    .isEqualTo("MR");
+        }
+
+        // The visit number is typed VN; with no assigning authority (PV1-19.4) it has no system.
+        JsonNode visit = encounter.path("identifier").get(0);
+        assertThat(visit.path("value").asText()).isEqualTo("VN100001");
+        assertThat(visit.has("system")).isFalse();
+        assertThat(visit.path("type").path("coding").get(0).path("code").asText()).isEqualTo("VN");
+
+        // The attending doctor has an ID number and a name only, so it is a reference by identifier.
+        JsonNode attending = encounter.path("participant").get(0).path("individual");
+        assertThat(attending.path("type").asText()).isEqualTo("Practitioner");
+        assertThat(attending.path("identifier").path("value").asText()).isEqualTo("1234");
+        assertThat(attending.path("identifier").path("type").path("coding").get(0).path("code").asText())
+                .isEqualTo("PRN");
+        assertThat(attending.path("display").asText()).isEqualTo("DR ADAM SMITH");
+        assertThat(attending.has("reference")).isFalse();
+        assertThat(r.resources()).doesNotContainKey("Practitioner");
+
+        // Results in the same message refer to the Encounter both ways.
+        String oru = "MSH|^~\\&|LAB|L|R|H|20260101||ORU^R01^ORU_R01|X1|P|2.5.1\r"
+                + "PID|1||42^^^H^MR||DOE^JANE\r"
+                + "PV1|1|I|WARD1||||1234^SMITH^ADAM^^^DR^^^DEMO_HOSP||||||||||||V100^^^DEMO_HOSP\r"
+                + "OBR|1||F1|718-7^Hemoglobin^LN\r"
+                + "OBX|1|NM|718-7^Hemoglobin^LN||13.5|g/dL|||||F\r";
+        V2ToFhir.Result results = V2ToFhir.convert(oru);
+        String url = results.bundle().path("entry").get(1).path("fullUrl").asText();
+        JsonNode ref = resources(results, "Observation").get(0).path("encounter");
+        assertThat(ref.path("reference").asText()).isEqualTo(url);
+        assertThat(ref.path("identifier").path("system").asText()).isEqualTo("urn:hl7v2:DEMO_HOSP");
+        assertThat(ref.path("identifier").path("value").asText()).isEqualTo("V100");
+        assertThat(ref.path("identifier").path("type").path("coding").get(0).path("code").asText()).isEqualTo("VN");
+        // XCN-9 is the practitioner identifier's assigning authority.
+        assertThat(resources(results, "Encounter").get(0).path("participant").get(0).path("individual")
+                .path("identifier").path("system").asText()).isEqualTo("urn:hl7v2:DEMO_HOSP");
+        // A visit-number-only PV1 also gets the system and type in its identifier reference.
+        JsonNode logical = resources(V2ToFhir.convert(oru.replace("PV1|1|I|WARD1||||1234^SMITH^ADAM^^^DR^^^DEMO_HOSP|",
+                "PV1|1|||||||")), "Observation").get(0).path("encounter");
+        assertThat(logical.has("reference")).isFalse();
+        assertThat(logical.path("identifier").path("system").asText()).isEqualTo("urn:hl7v2:DEMO_HOSP");
+        assertThat(logical.path("identifier").path("type").path("coding").get(0).path("code").asText())
+                .isEqualTo("VN");
+
+        // A practitioner with only a name keeps a display, without a type or identifier.
+        JsonNode requester = resources(V2ToFhir.convert(sample("ORM^O01").replace("1234^SMITH", "^SMITH")),
+                "ServiceRequest").get(0).path("requester");
+        assertThat(requester.path("display").asText()).isEqualTo("DR ADAM SMITH");
+        assertThat(requester.has("identifier")).isFalse();
+        assertThat(requester.has("type")).isFalse();
+    }
+
+    @Test
     void patientClassWithNoEquivalentBecomesNullFlavorUnknown() {
         String base = "MSH|^~\\&|A|B|C|D|20260101120000||ADT^A01|X1|P|2.5.1\r"
                 + "PID|1||42^^^H^MR||DOE^JANE\r"

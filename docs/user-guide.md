@@ -235,8 +235,15 @@ Encounter classes IMP, AMB, EMER and PRENC; any other value, or an empty PV1-2, 
 (unknown) with a note naming PV1-2, rather than a guessed class. Outside ADT messages, a PV1 that carries only a
 visit number (PV1-19) does not create an Encounter: the results, orders and conditions refer to the existing
 Encounter by that identifier instead, with a note saying so. Resources that have an `encounter` element
-(Observation, DiagnosticReport, ServiceRequest, Condition) refer to the visit either way. The conversion covers the common fields of the HL7
-v2-to-FHIR mappings; it is meant for previews, test data and simple feeds. `hl7send fhir convert` prints the same
+(Observation, DiagnosticReport, ServiceRequest, Condition) refer to the visit either way.
+
+References follow "reference by identity". A reference to the Patient or Encounter in the bundle also carries its
+identifier: the first PID-3, or the PV1-19 visit number with type `VN` and a system from its assigning authority
+(PV1-19.4). A receiver that already has the patient or visit can match it by identifier. A doctor (PV1-7, ORC-12,
+OBR-16) is only an ID number and a name in HL7 v2, so it becomes a reference by identifier, with type `PRN` and a
+system from XCN-9, and the name as its display; no Practitioner resource is created.
+
+The conversion covers the common fields of the HL7 v2-to-FHIR mappings; it is meant for previews, test data and simple feeds. `hl7send fhir convert` prints the same
 Bundle.
 
 ## Load testing

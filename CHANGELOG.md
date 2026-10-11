@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-10-11
+
+### Changed
+- HL7 v2 to FHIR follows "reference by identity". References to the Patient and the Encounter in the bundle now
+  carry the identifier as well as the reference (`{"reference": "urn:uuid:...", "identifier": {...}}`), so a
+  receiver that already has the patient or visit can match it.
+- The visit number (PV1-19) is an identifier of type `VN`, with a system from its assigning authority (PV1-19.4),
+  both on the Encounter and in references to it, including the identifier-only reference from 1.2.1.
+- Doctors (PV1-7 attending, ORC-12 or OBR-16 ordering provider) become a reference by identifier: the ID number
+  (XCN-1) with type `PRN` and a system from XCN-9, plus the name as the display. Before, only the name was kept.
+
 ## [1.2.1] - 2026-10-07
 
 ### Changed
@@ -173,7 +184,8 @@ The first public release. Everything below is new. HL7 Sender is released under 
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.1...main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.2...main
+[1.2.2]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.0...v1.1.1
