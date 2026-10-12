@@ -464,6 +464,12 @@ final class MainWindow extends BorderPane {
             notifier().show(new io.hl7sender.core.alert.Alert(io.hl7sender.core.alert.Alert.Kind.UPDATE,
                     io.hl7sender.core.alert.Alert.Severity.INFO, 0, "", text, Messages.get("update.notice.detail"),
                     java.time.Instant.now()));
+        }), p -> Platform.runLater(() -> {
+            String text = Messages.get("update.notice.ready", p.version());
+            setStatus(text);
+            notifier().show(new io.hl7sender.core.alert.Alert(io.hl7sender.core.alert.Alert.Kind.UPDATE,
+                    io.hl7sender.core.alert.Alert.Severity.INFO, 0, "", text, Messages.get("update.notice.detail"),
+                    java.time.Instant.now()));
         }));
     }
 

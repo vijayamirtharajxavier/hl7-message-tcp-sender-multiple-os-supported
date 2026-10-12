@@ -123,6 +123,17 @@ Run anyway**, or install a signed release.
 **Update check fails.** It needs HTTPS access to `api.github.com`. Behind a proxy, start Java with
 `-Dhttps.proxyHost=... -Dhttps.proxyPort=...`. The check is optional; nothing else needs the internet.
 
+**"Installing updates from here is not available".** The message says why: installing was turned off by your
+administrator, no installer is published for this system (an Intel Mac or ARM Linux), or HL7 Sender cannot replace
+this installation (for example a `.deb` or `.rpm` without `pkexec`, or a folder you cannot write to). Use **Open
+download page** and install it yourself.
+
+**An update was downloaded but not installed.** Look at `install.log` (and `msiexec.log` on Windows) in
+`updates/<version>/` in the data folder. "does not match its checksum" means the download was damaged or changed,
+so it was deleted and not installed; try again. On Windows, close the app and stop the `hl7send` service, then run
+the downloaded `.msi` yourself. On Linux, the package manager needs your password; if no password prompt appeared,
+install the downloaded `.deb` or `.rpm` with `sudo apt install ./file.deb` or `sudo dnf install ./file.rpm`.
+
 ## Shared database, users, scripts and plugins
 
 **"Cannot open the PostgreSQL queue database: Connection ... refused" or "... timed out".** The server is not

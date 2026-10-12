@@ -371,6 +371,66 @@ class QueueCliTest {
         }
     }
 
+    @Test
+    void updateInstallReplacesThisCopy() throws Exception {
+        // Pretend to be an installed portable copy (Linux) by setting what the jpackage launcher sets.
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").toLowerCase().contains("linux")
+                && System.getProperty("os.arch").matches("amd64|x86_64"), "portable Linux folder");
+        Path installed = dir.resolve("apps").resolve("hl7-sender");
+        Files.createDirectories(installed.resolve("bin"));
+        Files.writeString(installed.resolve("bin").resolve("hl7send"), "old");
+        Path build = dir.resolve("build").resolve("hl7-sender");
+        Files.createDirectories(build.resolve("bin"));
+        Files.writeString(build.resolve("bin").resolve("hl7send"), "new");
+        Path tgz = dir.resolve("hl7-sender-99.0.0-linux-x64.tar.gz");
+        Process tar = new ProcessBuilder("tar", "-czf", tgz.toString(), "-C", build.getParent().toString(),
+                "hl7-sender").start();
+        assertThat(tar.waitFor()).isZero();
+        byte[] archive = Files.readAllBytes(tgz);
+        String sha = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest(archive));
+
+        com.sun.net.httpserver.HttpServer releases = com.sun.net.httpserver.HttpServer.create(
+                new java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), 0), 0);
+        releases.createContext("/", ex -> {
+            String url = "http://127.0.0.1:" + releases.getAddress().getPort() + "/";
+            String path = ex.getRequestURI().getPath();
+            byte[] b = switch (path) {
+                case "/latest" -> ("{\"tag_name\":\"v99.0.0\",\"html_url\":\"https://example.org/99\",\"assets\":["
+                        + "{\"name\":\"" + tgz.getFileName() + "\",\"browser_download_url\":\"" + url
+                        + tgz.getFileName() + "\"},{\"name\":\"SHA256SUMS-Linux.txt\",\"browser_download_url\":\""
+                        + url + "SHA256SUMS-Linux.txt\"}]}").getBytes(StandardCharsets.UTF_8);
+                case "/SHA256SUMS-Linux.txt" -> (sha + "  " + tgz.getFileName() + "\n")
+                        .getBytes(StandardCharsets.UTF_8);
+                default -> archive;
+            };
+            ex.sendResponseHeaders(200, b.length);
+            ex.getResponseBody().write(b);
+            ex.close();
+        });
+        releases.start();
+        System.setProperty("hl7sender.updateUrl", "http://127.0.0.1:" + releases.getAddress().getPort() + "/latest");
+        try {
+            // A development build cannot replace itself, and says so.
+            assertThat(run("update", "--install", "--yes")).isEqualTo(ExitCodes.USAGE);
+            assertThat(err.toString()).contains("not an installed copy", "https://example.org/99");
+
+            System.setProperty("jpackage.app-path", installed.resolve("bin").resolve("hl7send").toString());
+            // Without a terminal to ask in, --yes is required.
+            assertThat(run("update", "--install")).isEqualTo(ExitCodes.USAGE);
+            assertThat(err.toString()).contains("--yes");
+
+            assertThat(run("update", "--install", "--yes", "--json")).isZero();
+            assertThat(json().path("installed").asBoolean()).isTrue();
+            assertThat(installed.resolve("bin").resolve("hl7send")).hasContent("new");
+            assertThat(home.resolve("data").resolve("updates").resolve("99.0.0")).isDirectory();
+        } finally {
+            System.clearProperty("hl7sender.updateUrl");
+            System.clearProperty("jpackage.app-path");
+            releases.stop(0);
+        }
+    }
+
     private static boolean parsesAsXml(String xml) {
         try {
             DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();

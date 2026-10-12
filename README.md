@@ -183,8 +183,9 @@ no administrator rights), `.dmg`/`.pkg` (macOS, Apple silicon), `.deb`/`.rpm`, `
 x64). They include their own Java runtime and install both the app and `hl7send`. See the
 [user guide](docs/user-guide.md#install) for details.
 
-**Help > Check for updates...** (or `hl7send update`) tells you when a newer release is out. The daily automatic
-check is off until you turn it on, and nothing is downloaded automatically.
+**Help > Check for updates...** (or `hl7send update`) tells you when a newer release is out, and **Install now**
+(or `hl7send update --install`) downloads it, checks its SHA-256 checksum and installs it, keeping your settings and
+queue. Checking daily and installing automatically are both off until you turn them on.
 
 ## Documentation
 

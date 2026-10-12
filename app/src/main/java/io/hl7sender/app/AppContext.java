@@ -20,6 +20,7 @@ import io.hl7sender.core.secrets.SecretStores;
 import io.hl7sender.core.send.Hl7Sender;
 import io.hl7sender.core.template.TemplateEngine;
 import io.hl7sender.core.template.TemplateStore;
+import io.hl7sender.core.update.UpdateInstaller;
 import java.io.IOException;
 import java.time.Clock;
 import java.util.Optional;
@@ -57,6 +58,17 @@ final class AppContext implements AutoCloseable {
     private final LogBuffer logs = LogBuffer.install();
     private String queueUnavailableReason = "";
     private volatile Access access = Access.OPEN;
+    private volatile UpdateInstaller.Detection updateDetection;
+    private volatile PendingUpdate pendingUpdate;
+
+    /**
+     * An update to install once the app has closed.
+     *
+     * @param update   the verified installer
+     * @param relaunch open the app again afterwards (the user chose Install and restart)
+     */
+    record PendingUpdate(UpdateInstaller.Prepared update, boolean relaunch) {
+    }
 
     AppContext(AppPaths paths) {
         this.paths = paths;
@@ -220,6 +232,57 @@ final class AppContext implements AutoCloseable {
     public void close() {
         executor.shutdownNow();
         closeQueue();
+    }
+
+    /** How this copy was installed, for installing updates. Worked out once; it may run dpkg-query or rpm. */
+    UpdateInstaller.Detection updateDetection() {
+        UpdateInstaller.Detection d = updateDetection;
+        if (d == null) {
+            d = UpdateInstaller.detect();
+            updateDetection = d;
+        }
+        return d;
+    }
+
+    /** For tests: pretend this copy was installed as {@code detection} says. */
+    void setUpdateDetection(UpdateInstaller.Detection detection) {
+        updateDetection = detection;
+    }
+
+    /** The installer for this copy, if it can install updates itself. */
+    Optional<UpdateInstaller> updateInstaller() {
+        return updateDetection().installation().map(i -> new UpdateInstaller(i, paths.dataDir().resolve("updates")));
+    }
+
+    /** Installs {@code update} when the app closes, and opens it again afterwards if {@code relaunch}. */
+    void installOnExit(UpdateInstaller.Prepared update, boolean relaunch) {
+        pendingUpdate = new PendingUpdate(update, relaunch);
+    }
+
+    /** Forgets an update waiting for the app to close. */
+    void cancelInstallOnExit() {
+        pendingUpdate = null;
+    }
+
+    Optional<PendingUpdate> pendingUpdate() {
+        return Optional.ofNullable(pendingUpdate);
+    }
+
+    /**
+     * Starts installing the pending update, if any, in a process that waits for this one to exit. Called last when
+     * the app stops, after the queue is closed.
+     */
+    void startPendingInstall() {
+        PendingUpdate p = pendingUpdate;
+        if (p == null) {
+            return;
+        }
+        try {
+            UpdateInstaller.launch(p.update(), ProcessHandle.current().pid(), p.relaunch());
+            LOG.info("Installing version {} from {} once the app has closed", p.update().version(), p.update().file());
+        } catch (IOException e) {
+            LOG.error("Could not start installing version {}", p.update().version(), e);
+        }
     }
 
     private void closeQueue() {

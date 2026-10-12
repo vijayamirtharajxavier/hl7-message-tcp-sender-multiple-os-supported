@@ -275,9 +275,37 @@ your user name. The command line asks for the same sign-in: `hl7send --user NAME
 
 ## Updates
 
-**Help > Check for updates...** compares your version with the latest release on GitHub and links to its download
-page. Tick **Check automatically** to check once a day at startup. Nothing is downloaded or installed
-automatically, and only the version request is sent. Installing a newer version keeps your settings and queue.
+**Help > Check for updates...** compares your version with the latest release on GitHub. When a newer version is
+out:
+
+- **Install now** downloads the installer for your system, checks it against the SHA-256 checksums published with
+  the release, and asks when to install it:
+  - **Install and restart**: HL7 Sender closes, installs the new version and opens again.
+  - **Install when I close HL7 Sender**: it is installed the next time you close the app.
+- **Open download page** lets you download and install it yourself.
+
+Tick **Check automatically** to check once a day at startup. Tick **Download and install updates automatically** as
+well, and a new version is downloaded in the background and installed when you close HL7 Sender; a notification
+says when one is ready. Both are off until you turn them on, and **Do not remind me about this version** also stops
+that version from being installed. Only the version request is sent to GitHub.
+
+Installing keeps your settings, destinations and queue. The queue database is migrated when the new version starts,
+and messages waiting in the queue are sent then. How each installation is updated:
+
+| Installed from | The update |
+|---|---|
+| Windows `.msi` | Installs into the same folder with a progress bar; no administrator rights needed |
+| macOS `.dmg` | Replaces the app in its folder (usually Applications) |
+| macOS `.pkg` | Opens in Installer, which asks for your password (the `.pkg` installs for all users) |
+| Ubuntu/Debian `.deb`, Fedora/RHEL `.rpm` | Installs through the package manager after you enter your password |
+| AppImage | Replaces the AppImage file |
+| Portable `.tar.gz` | Replaces the folder |
+
+On the command line, `hl7send update --install` does the same; add `--yes` to skip the question in scripts. On
+macOS and Linux it installs straight away in the terminal; on Windows it installs as soon as `hl7send` exits, so
+close the app and stop the `hl7send` service first. If an update does not install, the downloaded installer and
+`install.log` are in the `updates` folder inside the data folder (see the administrator guide), and you can always
+run the installer yourself.
 
 ## Keyboard shortcuts
 

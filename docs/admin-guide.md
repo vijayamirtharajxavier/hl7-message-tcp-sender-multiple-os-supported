@@ -57,8 +57,9 @@ files holding secrets are readable only by their owner. Destinations are stored 
   destinations. With a shared database, TCP to the PostgreSQL server (5432 by default).
 - **Inbound**: none by default. The test listener opens the port you choose; the local API listens on
   `127.0.0.1:8742` only when turned on.
-- **Internet**: none required. The optional update check calls `https://api.github.com`; alerts may call your
-  webhook and SMTP server.
+- **Internet**: none required. The optional update check calls `https://api.github.com`, and installing an update
+  downloads from `https://github.com` (release files are served from `objects.githubusercontent.com`); alerts may
+  call your webhook and SMTP server.
 
 ## Unattended delivery
 
@@ -152,11 +153,28 @@ recovery key from **Help > Security** on the old machine and use **Restore key**
 
 ## Updates
 
-The app checks GitHub Releases only if the user turns on **Check automatically** (off by default). To keep it
-off, simply leave it off; to point it at an internal mirror of the GitHub releases API, start the app with
-`-Dhl7sender.updateUrl=https://mirror.example/releases/latest`. Nothing is ever downloaded automatically.
-Updates are installed by running the newer installer; data folders are kept and the queue database is migrated
-on first start.
+The app checks GitHub Releases only if the user turns on **Check automatically**, and downloads and installs a
+newer version only when the user clicks **Install now** or turns on **Download and install updates automatically**.
+Both are off by default. An installer is installed only if it matches the SHA-256 checksum file published with the
+same release, and only over HTTPS. The checksums show the download is complete and unchanged, not who built it: the
+installers are not code-signed yet. Data folders are kept, and the queue database is migrated on first start.
+
+- **Turn installing off** for everyone on a computer by setting the environment variable
+  `JAVA_TOOL_OPTIONS=-Dhl7sender.updateInstall=false` for all users. Checking still works, and the app says that
+  installing was turned off by the administrator. (The same option in the launcher's `.cfg` file also works, but
+  an update replaces that file.)
+- **Internal mirror**: point the check at a copy of the GitHub releases API with
+  `-Dhl7sender.updateUrl=https://mirror.example/releases/latest`. To install from it, its JSON must list the
+  release files as GitHub does (`assets` with `name` and `browser_download_url`), including the
+  `SHA256SUMS-*.txt` files.
+- **Where downloads go**: `updates/<version>/` in the data folder, with `install.log` (and `msiexec.log` on
+  Windows). They are deleted once that version runs.
+- **System packages**: a `.deb` or `.rpm` installation is updated through `apt-get`, `dnf`, `zypper` or `rpm`,
+  with `pkexec` asking for a password. Without `pkexec` the app cannot update it; use your usual package
+  deployment. The `.pkg` on macOS also asks for a password.
+- **Services**: after an update, the `hl7send` systemd user service (Linux) and launchd agent (macOS, when
+  updated from the `.dmg`) are restarted. On Windows, stop the `hl7send` service before updating and start it afterwards, because Windows
+  Installer cannot replace files in use.
 
 ## Logs
 

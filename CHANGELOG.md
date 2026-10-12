@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-12
+
+### Added
+- **Install updates from the app.** When Help > Check for updates finds a newer version, **Install now** downloads
+  the installer for this system, checks it against the SHA-256 checksums published with the release, and installs
+  it: closing and restarting the app, or the next time the user closes it. Settings, destinations and the queue
+  are kept.
+- **Download and install updates automatically** (off by default): a newer version found by the daily check is
+  downloaded in the background and installed when the app closes, with a notification when it is ready.
+- `hl7send update --install [--yes]` does the same from the command line.
+- Each kind of installation is updated in its own way: the Windows `.msi` with `msiexec` into the same folder (no
+  administrator rights), the macOS app replaced from the `.dmg` (or the `.pkg` opened in Installer), `.deb` and
+  `.rpm` through the package manager with `pkexec`, and the AppImage or portable folder replaced in place.
+- Administrators can turn installing off with `-Dhl7sender.updateInstall=false` (for example in
+  `JAVA_TOOL_OPTIONS`); checking still works.
+
 ## [1.2.2] - 2026-10-11
 
 ### Changed
@@ -184,7 +200,8 @@ The first public release. Everything below is new. HL7 Sender is released under 
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.2...main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.3.0...main
+[1.3.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.1.1...v1.2.0

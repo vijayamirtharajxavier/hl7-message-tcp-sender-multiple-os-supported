@@ -76,16 +76,38 @@ public record AppSettings(Destination destination, Sender sender, Listener liste
      * @param checkAutomatically check GitHub Releases for a newer version at most once a day
      * @param lastCheckedMillis  when the last automatic check ran (epoch milliseconds), or 0
      * @param skippedVersion     a version the user chose not to be reminded about, or empty
+     * @param installAutomatically download a newer version in the background and install it when the app closes
      */
-    public record Updates(boolean checkAutomatically, long lastCheckedMillis, String skippedVersion) {
+    public record Updates(boolean checkAutomatically, long lastCheckedMillis, String skippedVersion,
+                          boolean installAutomatically) {
+
+        public Updates(boolean checkAutomatically, long lastCheckedMillis, String skippedVersion) {
+            this(checkAutomatically, lastCheckedMillis, skippedVersion, false);
+        }
 
         public static Updates defaults() {
-            return new Updates(false, 0, "");
+            return new Updates(false, 0, "", false);
         }
 
         Updates normalized() {
             return new Updates(checkAutomatically, Math.max(0, lastCheckedMillis),
-                    skippedVersion == null ? "" : skippedVersion.trim());
+                    skippedVersion == null ? "" : skippedVersion.trim(), installAutomatically);
+        }
+
+        public Updates withCheckAutomatically(boolean on) {
+            return new Updates(on, lastCheckedMillis, skippedVersion, installAutomatically);
+        }
+
+        public Updates withLastChecked(long millis) {
+            return new Updates(checkAutomatically, millis, skippedVersion, installAutomatically);
+        }
+
+        public Updates withSkippedVersion(String version) {
+            return new Updates(checkAutomatically, lastCheckedMillis, version, installAutomatically);
+        }
+
+        public Updates withInstallAutomatically(boolean on) {
+            return new Updates(checkAutomatically, lastCheckedMillis, skippedVersion, on);
         }
     }
 

@@ -102,5 +102,8 @@ public final class Hl7SenderApp extends Application {
             context.close();
         }
         LOG.info("{} stopped", AppInfo.NAME);
+        if (context != null) {
+            context.startPendingInstall();
+        }
     }
 }

@@ -10,14 +10,17 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Asks GitHub Releases whether a newer version exists. It only reads the latest release's version, page link and
- * notes: nothing is downloaded or installed, and no data about the user or their messages is sent (the request
- * carries the app version in its User-Agent). Pre-releases and drafts are ignored.
+ * Asks GitHub Releases whether a newer version exists. It reads the latest release's version, page link, notes and
+ * list of downloads; it downloads and installs nothing itself (that is {@link UpdateInstaller}), and no data about
+ * the user or their messages is sent (the request carries the app version in its User-Agent). Pre-releases and
+ * drafts are ignored.
  *
  * <p>The URL can be changed with {@code -Dhl7sender.updateUrl=...}, for example to an internal mirror.
  */
@@ -37,8 +40,28 @@ public final class UpdateChecker {
      * @param pageUrl     release page with the downloads
      * @param notes       release notes (Markdown)
      * @param publishedAt when it was published, if known
+     * @param assets      its downloads: installers and checksum files
      */
-    public record Release(String version, String pageUrl, String notes, Optional<Instant> publishedAt) {
+    public record Release(String version, String pageUrl, String notes, Optional<Instant> publishedAt,
+                          List<Asset> assets) {
+
+        public Release {
+            assets = assets == null ? List.of() : List.copyOf(assets);
+        }
+
+        public Release(String version, String pageUrl, String notes, Optional<Instant> publishedAt) {
+            this(version, pageUrl, notes, publishedAt, List.of());
+        }
+    }
+
+    /**
+     * A download of a release.
+     *
+     * @param name file name, as GitHub shows it (spaces become dots: {@code HL7.Sender-1.2.2.msi})
+     * @param url  download URL
+     * @param size size in bytes, or 0 if unknown
+     */
+    public record Asset(String name, String url, long size) {
     }
 
     /**
@@ -64,6 +87,11 @@ public final class UpdateChecker {
     /** The checker for this build: GitHub Releases, or {@code hl7sender.updateUrl} if set. */
     public static UpdateChecker forThisBuild() {
         return new UpdateChecker(System.getProperty("hl7sender.updateUrl", DEFAULT_URL), AppInfo.version());
+    }
+
+    /** The running version this checker compares releases with. */
+    public String currentVersion() {
+        return currentVersion;
     }
 
     public Result check() throws IOException {
@@ -97,8 +125,17 @@ public final class UpdateChecker {
                 // Informational only.
             }
         }
+        List<Asset> assets = new ArrayList<>();
+        for (JsonNode a : n.path("assets")) {
+            String name = a.path("name").asText("");
+            String url = a.path("browser_download_url").asText("");
+            if (!name.isEmpty() && !url.isEmpty()) {
+                assets.add(new Asset(name, url, a.path("size").asLong(0)));
+            }
+        }
         Release latest = new Release(tag.startsWith("v") ? tag.substring(1) : tag,
-                n.path("html_url").asText(AppInfo.HOMEPAGE + "/releases"), n.path("body").asText(""), published);
+                n.path("html_url").asText(AppInfo.HOMEPAGE + "/releases"), n.path("body").asText(""), published,
+                assets);
         return new Result(currentVersion, latest, isNewer(latest.version(), currentVersion));
     }
 
