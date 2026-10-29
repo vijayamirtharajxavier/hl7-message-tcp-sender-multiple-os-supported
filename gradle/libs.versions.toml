@@ -55,4 +55,4 @@ hapi-structures = ["hapi-v21", "hapi-v22", "hapi-v23", "hapi-v231", "hapi-v24", 
 
 [plugins]
 javafx = { id = "org.openjfx.javafxplugin", version = "0.1.0" }
-spotbugs = { id = "com.github.spotbugs", version = "6.2.4" }
+spotbugs = { id = "com.github.spotbugs", version = "6.5.13" }
