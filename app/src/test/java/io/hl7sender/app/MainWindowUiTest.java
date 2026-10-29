@@ -215,6 +215,60 @@ class MainWindowUiTest {
         await(() -> text(robot, "#listenerStateBadge").equals("Stopped"));
     }
 
+    @Test
+    void listenerDropsTheFirstAttemptAndFlagsTheRetryAsADuplicate(FxRobot robot) throws Exception {
+        int port;
+        try (ServerSocket s = new ServerSocket(0)) {
+            port = s.getLocalPort();
+        }
+        robot.interact(() -> {
+            TabPane tabs = robot.lookup("#mainTabs").queryAs(TabPane.class);
+            tabs.getSelectionModel().select(tabs.getTabs().stream()
+                    .filter(t -> "listenerTab".equals(t.getId())).findFirst().orElseThrow());
+            robot.lookup("#listenerBindField").queryAs(TextField.class).setText("127.0.0.1");
+            robot.lookup("#listenerPortField").queryAs(TextField.class).setText(String.valueOf(port));
+            @SuppressWarnings("unchecked")
+            ComboBox<ResponseMode> mode = robot.lookup("#listenerModeBox").queryAs(ComboBox.class);
+            mode.setValue(ResponseMode.CLOSE_FIRST_ATTEMPT);
+        });
+        robot.clickOn("#listenerStartButton");
+        await(() -> text(robot, "#listenerStateBadge").startsWith("Listening"));
+
+        // A retry sends the same MSH-10 again.
+        MllpClientConfig dest = MllpClientConfig.of("127.0.0.1", port);
+        String sample = SampleMessages.all().get(0).text();
+        assertThat(context.sender().send(dest, sample, SendOptions.AS_IS).outcome().name())
+                .isEqualTo("CONNECTION_CLOSED");
+        assertThat(context.sender().send(dest, sample, SendOptions.AS_IS).outcome().name()).isEqualTo("ACCEPTED");
+
+        @SuppressWarnings("unchecked")
+        TableView<io.hl7sender.core.listener.ReceivedMessage> table =
+                robot.lookup("#listenerTable").queryAs(TableView.class);
+        await(() -> table.getItems().size() == 2);
+        javafx.scene.control.TableColumn<io.hl7sender.core.listener.ReceivedMessage, ?> copy = table.getColumns()
+                .stream().filter(c -> "listenerCopyColumn".equals(c.getId())).findFirst().orElseThrow();
+        // Newest first: the retry is copy 2 and was accepted; the first copy was dropped without a response.
+        assertThat(copy.getCellData(0)).isEqualTo("2");
+        assertThat(copy.getCellData(1)).isEqualTo("");
+        assertThat(table.getItems().get(0).responseCode()).isEqualTo("AA");
+        assertThat(table.getItems().get(1).responseCode()).isEqualTo("closed");
+        assertThat(text(robot, "#statusLabel")).contains("duplicate: copy 2");
+        robot.interact(() -> table.getSelectionModel().select(1));
+        assertThat(robot.lookup("#listenerResponseText").queryAs(TextArea.class).getText())
+                .isEqualTo("(no response sent)");
+        screenshot(robot, "45-listener-duplicate");
+
+        // Clear forgets what arrived: the next copy is the first again, and is dropped.
+        robot.clickOn("#listenerClearButton");
+        assertThat(context.sender().send(dest, sample, SendOptions.AS_IS).outcome().name())
+                .isEqualTo("CONNECTION_CLOSED");
+        await(() -> table.getItems().size() == 1);
+        assertThat(table.getItems().get(0).copy()).isEqualTo(1);
+
+        robot.clickOn("#listenerStartButton");
+        await(() -> text(robot, "#listenerStateBadge").equals("Stopped"));
+    }
+
     private void screenshot(FxRobot robot, String name) throws Exception {
         screenshot(robot, window, name);
     }

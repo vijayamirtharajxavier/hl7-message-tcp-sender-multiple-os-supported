@@ -92,3 +92,7 @@
     -fx-padding: 4 8 4 8;
     -fx-background-radius: 3;
 }
+
+/* Test Listener: a message received again (the sender retried). */
+.table-row-cell:duplicate .table-cell { -fx-text-fill: -hl7-warning; }
+.table-row-cell:duplicate:selected .table-cell { -fx-text-fill: -fx-selection-bar-text; }

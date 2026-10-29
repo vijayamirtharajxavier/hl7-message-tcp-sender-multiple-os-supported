@@ -131,6 +131,7 @@ Java runtime, so nothing else needs to be installed.
 - Built-in samples (ADT^A01, ADT^A08, ORM^O01, ORU^R01) with fictitious data. Can open `.hl7` files.
 - Response panel showing MSA-1, MSA-2, MSA-3, ERR, the raw ACK, the exact message sent, timings and session history.
 - **Test Listener** tab: a mock MLLP receiver that can accept, error, reject, send the wrong control ID, send a malformed response, stay silent, or close the connection, with an optional delay. Settings change live while it runs.
+- It flags **duplicates** (the same sender and MSH-10 arriving again), and can **close the connection on the first attempt and accept the retry**, like a receiver that commits a message but fails before its ACK.
 
 **Testing and simulation**
 - **Load Test** tab and `hl7send load`: N connections at a target rate for a count or a duration, with throughput,

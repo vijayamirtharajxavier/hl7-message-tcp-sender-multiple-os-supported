@@ -174,13 +174,14 @@ final class ListenCommand implements Callable<Integer> {
     }
 
     private static synchronized void print(PrintWriter out, ReceivedMessage m) {
-        out.printf("%s  %-21s  %-10s  %-20s  -> %s%s%n",
+        out.printf("%s  %-21s  %-10s  %-20s  -> %s%s%s%n",
                 TIME.format(LocalTime.ofInstant(m.receivedAt(), ZoneId.systemDefault())),
                 m.remote(),
                 m.messageType().isEmpty() ? "?" : m.messageType(),
                 m.controlId(),
                 m.responseCode(),
-                m.rule().isEmpty() ? "" : "  (rule: " + m.rule() + ")");
+                m.rule().isEmpty() ? "" : "  (rule: " + m.rule() + ")",
+                m.duplicate() ? "  (duplicate: copy " + m.copy() + ")" : "");
         out.flush();
     }
 }

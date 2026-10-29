@@ -24,7 +24,9 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,6 +40,9 @@ import org.slf4j.LoggerFactory;
  * A mock MLLP receiver for testing senders. It accepts any number of concurrent connections, reads
  * messages, and answers each one according to the current {@link ListenerSettings}: ACK/NACK,
  * delay, silence, a malformed reply, or a dropped connection.
+ *
+ * <p>It counts how many times each message arrives, by sending application, facility and MSH-10, so a repeat (a
+ * sender retrying a message the listener already has) is reported as a duplicate ({@link ReceivedMessage#copy()}).
  *
  * <p>As a responder it simulates the other side of an interface: {@link ResponseRule}s choose the response by
  * message type and field values, can answer with a custom template, and can send a follow-up message back
@@ -78,6 +83,14 @@ public final class TestListener implements Closeable {
     private volatile Active active;
     private volatile FollowUpHandler followUps;
     private volatile ServerSocket server;
+    /** How many times each message has arrived, by sender and control ID; the oldest are forgotten first. */
+    private final Map<String, Integer> seen = new LinkedHashMap<>(256, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Integer> eldest) {
+            return size() > MAX_REMEMBERED;
+        }
+    };
+    private static final int MAX_REMEMBERED = 100_000;
     private SSLContext tlsContext;
     private boolean requireClientCertificate;
 
@@ -233,6 +246,24 @@ public final class TestListener implements Closeable {
         }
     }
 
+    /** Counts one more arrival of the message {@code header} describes; returns 1 the first time. */
+    private int count(MessageHeader header) {
+        if (header == null || header.controlId().isEmpty()) {
+            return 1;
+        }
+        String key = header.sendingApplication() + "|" + header.sendingFacility() + "|" + header.controlId();
+        synchronized (seen) {
+            return seen.merge(key, 1, Integer::sum);
+        }
+    }
+
+    /** Forgets which messages arrived before, so the next copy of each counts as the first again. */
+    public void forgetReceived() {
+        synchronized (seen) {
+            seen.clear();
+        }
+    }
+
     /** Handles one frame. Returns false if the connection should be closed. */
     private boolean handle(byte[] frame, Active a, String remote, InetAddress remoteAddress, OutputStream out)
             throws IOException, InterruptedException {
@@ -244,6 +275,11 @@ public final class TestListener implements Closeable {
         ResponseRule rule = parsed == null ? null : a.rules().stream().filter(r -> r.matches(parsed)).findFirst()
                 .map(ResponseRule.Compiled::rule).orElse(null);
         ResponseMode mode = rule == null ? s.mode() : rule.mode();
+        int copy = count(header);
+        // A receiver that commits the message but fails before its ACK: drop the first copy, accept repeats.
+        ResponseMode effective = mode != ResponseMode.CLOSE_FIRST_ATTEMPT ? mode
+                : copy == 1 && header != null && !header.controlId().isEmpty() ? ResponseMode.CLOSE_CONNECTION
+                : ResponseMode.ACCEPT;
         int delayMs = rule == null ? s.delayMs() : rule.delayMs();
         String text = rule == null ? s.responseText() : rule.responseText();
 
@@ -257,13 +293,14 @@ public final class TestListener implements Closeable {
         String response = null;
         String code;
         boolean keepOpen = true;
-        switch (mode) {
+        switch (effective) {
             case ACCEPT, ERROR, REJECT, WRONG_CONTROL_ID -> {
-                AckCode ackCode = codeFor(mode, s.commitCodes(), parsed == null);
+                AckCode ackCode = codeFor(effective, s.commitCodes(), parsed == null);
                 if (parsed == null) {
                     response = ackBuilder.buildForUnparseable(ackCode, "Unable to parse message");
                 } else {
-                    String override = mode == ResponseMode.WRONG_CONTROL_ID ? "WRONG-" + header.controlId() : null;
+                    String override = effective == ResponseMode.WRONG_CONTROL_ID ? "WRONG-" + header.controlId()
+                            : null;
                     response = ackBuilder.build(parsed, ackCode, text, override);
                 }
                 code = ackCode.name();
@@ -281,13 +318,13 @@ public final class TestListener implements Closeable {
                 code = "closed";
                 keepOpen = false;
             }
-            default -> throw new IllegalStateException("Unhandled mode " + mode);
+            default -> throw new IllegalStateException("Unhandled mode " + effective);
         }
 
-        LOG.info("Received {} [{}] from {} -> {}{}",
+        LOG.info("Received {} [{}] from {} -> {}{}{}",
                 header == null ? "unparseable message" : header.messageType(),
                 header == null ? "" : header.controlId(), remote, code,
-                rule == null ? "" : " (rule '" + rule.name() + "')");
+                rule == null ? "" : " (rule '" + rule.name() + "')", copy > 1 ? " (copy " + copy + ")" : "");
         // Notify before responding: once a sender has its ACK, the message is guaranteed to be visible
         // to observers. This avoids races in tests and in the UI's received-messages table.
         notifyListener(new ReceivedMessage(
@@ -299,7 +336,8 @@ public final class TestListener implements Closeable {
                 mode,
                 code,
                 Optional.ofNullable(response),
-                rule == null ? "" : rule.name()));
+                rule == null ? "" : rule.name(),
+                copy));
         if (response != null) {
             out.write(Mllp.frame(response, s.charset()));
             out.flush();

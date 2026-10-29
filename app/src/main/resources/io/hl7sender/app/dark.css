@@ -49,3 +49,7 @@
 .toast .label {
     -fx-text-fill: #1f2124;
 }
+
+/* Test Listener: a message received again (the sender retried). */
+.table-row-cell:duplicate .table-cell { -fx-text-fill: #ffcc80; }
+.table-row-cell:duplicate:selected .table-cell { -fx-text-fill: -fx-selection-bar-text; }

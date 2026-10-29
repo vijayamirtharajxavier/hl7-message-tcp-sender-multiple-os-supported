@@ -15,6 +15,8 @@ import java.util.Optional;
  * @param responseCode MSA-1 sent back, or a short label such as {@code none} / {@code closed} / {@code malformed}
  * @param response     response payload sent, if any
  * @param rule         name of the responder rule that decided the response, or empty for the default response
+ * @param copy         1 the first time this listener receives a message with this sending application, facility
+ *                     and control ID; 2, 3, ... when the same message arrives again. Always 1 without a control ID
  */
 public record ReceivedMessage(
         Instant receivedAt,
@@ -25,5 +27,11 @@ public record ReceivedMessage(
         ResponseMode mode,
         String responseCode,
         Optional<String> response,
-        String rule) {
+        String rule,
+        int copy) {
+
+    /** True if this listener received a message with the same sender and control ID before. */
+    public boolean duplicate() {
+        return copy > 1;
+    }
 }

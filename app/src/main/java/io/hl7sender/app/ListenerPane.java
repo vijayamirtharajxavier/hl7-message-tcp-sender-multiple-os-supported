@@ -91,6 +91,7 @@ final class ListenerPane extends BorderPane {
     private final ListView<ResponseRule> rulesList = new ListView<>();
     private final TextField saveFolderField = new TextField();
     private final TableView<ReceivedMessage> table = new TableView<>();
+    private static final javafx.css.PseudoClass DUPLICATE = javafx.css.PseudoClass.getPseudoClass("duplicate");
     private final TextArea receivedText = new TextArea();
     private final TextArea responseText = new TextArea();
 
@@ -184,6 +185,9 @@ final class ListenerPane extends BorderPane {
         clear.setId("listenerClearButton");
         clear.setOnAction(e -> {
             table.getItems().clear();
+            if (isRunning()) {
+                listener.forgetReceived();
+            }
             receivedText.clear();
             responseText.clear();
         });
@@ -454,6 +458,18 @@ final class ListenerPane extends BorderPane {
         table.getColumns().add(column("From", 160, ReceivedMessage::remote));
         table.getColumns().add(column("Type", 110, m -> m.messageType().isEmpty() ? "?" : m.messageType()));
         table.getColumns().add(column("Control ID", 200, ReceivedMessage::controlId));
+        // The same message again (the sender retried): its copy number, so duplicates stand out.
+        TableColumn<ReceivedMessage, String> copy = column("Copy", 60,
+                m -> m.duplicate() ? String.valueOf(m.copy()) : "");
+        copy.setId("listenerCopyColumn");
+        table.getColumns().add(copy);
+        table.setRowFactory(t -> new javafx.scene.control.TableRow<>() {
+            @Override
+            protected void updateItem(ReceivedMessage m, boolean empty) {
+                super.updateItem(m, empty);
+                pseudoClassStateChanged(DUPLICATE, !empty && m != null && m.duplicate());
+            }
+        });
         table.getColumns().add(column("Response", 110, ReceivedMessage::responseCode));
         table.getColumns().add(column(Messages.get("rules.column"), 180, ReceivedMessage::rule));
         table.getSelectionModel().selectedItemProperty().addListener((o, old, m) -> {
@@ -591,6 +607,7 @@ final class ListenerPane extends BorderPane {
         }
         status.accept("Listener received " + (m.messageType().isEmpty() ? "a message" : m.messageType())
                 + " from " + m.remote() + " -> " + m.responseCode()
-                + (m.rule().isEmpty() ? "" : " (rule: " + m.rule() + ")"));
+                + (m.rule().isEmpty() ? "" : " (rule: " + m.rule() + ")")
+                + (m.duplicate() ? " - duplicate: copy " + m.copy() + " of control ID " + m.controlId() : ""));
     }
 }

@@ -157,6 +157,19 @@ The **Test Listener** tab is a mock receiver. It can accept, return AE or AR, se
 malformed response, stay silent, or close the connection, optionally after a delay, and can use TLS. Use it to
 see how your destination settings behave before connecting to a real system.
 
+**Duplicates.** The listener counts how many times each message arrives, by sending application and facility
+(MSH-3, MSH-4) and control ID (MSH-10). When the same message arrives again, for example because the sender retried
+it, the **Copy** column shows 2, 3 and so on, the row is highlighted, and the status bar says so. **Clear**
+empties the list and forgets what arrived.
+
+**A receiver that fails before its ACK.** Choose **Close the connection on the first attempt, accept repeats** to
+simulate a receiver that commits a message but drops the connection before sending its ACK. The first time a
+message arrives, the listener keeps it (and saves it, if **Save received messages to** is set), then closes the
+connection without responding. When the sender retries, the same message is accepted and shown as copy 2. Use it
+to check that your sender retries with the same MSH-10, and that your receiver can recognise the duplicate. A
+responder rule can do this for some messages only, and `hl7send listen --mode close_first_attempt` does it from
+the command line.
+
 To try application ACKs, tick **Enhanced mode (CA/CE/CR)** and enter the destination's application ACK port in
 **App ACK to port**, with the code to send (AA, AE or AR). After each CA, the listener sends that application ACK
 to the sender one second later, following the message's MSH-16. `hl7send listen --commit-codes --app-ack-port`

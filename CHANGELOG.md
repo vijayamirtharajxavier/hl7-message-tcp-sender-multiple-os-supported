@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-29
+
+### Added
+- Test Listener: **duplicates are flagged.** The listener counts how many times each message arrives, by MSH-3,
+  MSH-4 and MSH-10. A repeat (a sender retrying a message the listener already has) shows its copy number in the
+  new **Copy** column, is highlighted, and is named in the status bar; `hl7send listen` prints
+  `(duplicate: copy 2)`. **Clear** forgets what arrived.
+- Test Listener: new response **Close the connection on the first attempt, accept repeats**
+  (`hl7send listen --mode close_first_attempt`, also in responder rules). It simulates a receiver that commits a
+  message but drops the connection before its ACK: the first copy is kept (and saved, if a folder is set) and the
+  connection closed without a response; the sender's retry, with the same MSH-10, is accepted as copy 2.
+
 ## [1.3.0] - 2026-10-12
 
 ### Added
@@ -200,7 +212,8 @@ The first public release. Everything below is new. HL7 Sender is released under 
 - Users and roles (viewer, operator, admin) with sign-in for the app and the CLI (`--user`, `hl7send user`,
   exit code 11), and user names in the audit trail.
 
-[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.3.0...main
+[Unreleased]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.3.1...main
+[1.3.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/vijayamirtharajxavier/hl7-message-tcp-sender-multiple-os-supported/compare/v1.2.0...v1.2.1
